@@ -473,6 +473,8 @@ pub mod component {
         pub const TITLE_SIZE: f32 = 17.0;
         pub const INPUT_SIZE: f32 = 14.0;
         pub const INPUT_HEIGHT: f32 = 48.0;
+        pub const ACTION_HEIGHT: f32 = 40.0;
+        pub const PUBLIC_TEXT_LINES: f32 = 128.0;
     }
     pub mod menu {
         pub const WIDTH: f32 = 800.0;

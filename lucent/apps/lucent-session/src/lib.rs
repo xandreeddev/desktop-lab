@@ -1,5 +1,6 @@
 //! Shared authentication presentation. PAM/greetd are selected by the executables.
-//! Secret input is held outside Element/Scene; only bullets reach the renderer.
+//! Secret prompts retain responses outside Element/Scene; only counts reach the
+//! renderer. Explicit backend Visible prompts keep their deliberate echoed input.
 use lucent_api::{self as api, *};
 use lucent_design::{Theme, component::authentication as token, font, radius, space};
 use lucent_domain::{self as domain, *};
@@ -30,6 +31,7 @@ pub enum Message {
     Finished(domain::Result<()>),
     Retry,
     Cancel,
+    PublicScroll { epoch: u64, offset: f32 },
 }
 struct Attempt {
     send: mpsc::SyncSender<Secret>,
@@ -50,6 +52,8 @@ pub struct SessionScreen {
     light: bool,
     palette: Option<domain::ThemePalette>,
     authorization: String,
+    public_scroll_epoch: u64,
+    public_scroll: f32,
 }
 impl SessionScreen {
     pub fn new(mode: Mode, identity: String, backend: Arc<dyn AuthenticationPort>) -> Self {
@@ -68,6 +72,8 @@ impl SessionScreen {
             light: false,
             palette: None,
             authorization: String::new(),
+            public_scroll_epoch: 0,
+            public_scroll: 0.,
         }
     }
     pub fn with_assets(mut self, assets: Arc<dyn SessionAssets>) -> Self {
@@ -94,6 +100,7 @@ impl SessionScreen {
         }
     }
     fn begin(&mut self) {
+        self.reset_public_scroll();
         self.secret.clear();
         self.prompt = None;
         self.status = "Connecting…".into();
@@ -111,6 +118,12 @@ impl SessionScreen {
             .as_ref()
             .is_some_and(|p| matches!(p.kind, PromptKind::Secret | PromptKind::Visible))
             || self.editing_identity()
+    }
+    fn reset_public_scroll(&mut self) {
+        // Changing the viewport identity also retires an active thumb capture;
+        // replacing only its callback would let the toolkit rebase that gesture.
+        self.public_scroll_epoch = self.public_scroll_epoch.wrapping_add(1);
+        self.public_scroll = 0.;
     }
 }
 impl Component for SessionScreen {
@@ -137,91 +150,109 @@ impl Component for SessionScreen {
                 .map(|p| p.text.as_str())
                 .unwrap_or("Please wait")
         };
-        let mut children = vec![
-            Element::text("LUCENT").font(font::CAPTION).color(t.primary),
+        let compact = cx.height < token::HEIGHT + space::XL * 2.;
+        let margin = if compact { space::SM } else { space::XL };
+        let padding = if compact { space::MD } else { token::PADDING };
+        let gap = if compact { space::SM } else { space::LG };
+        let public_copy = |text: &str, size| {
+            // RichText paints each wrapped line independently, including tails
+            // beyond the ordinary single-text raster height. No links or secrets.
+            Element::rich_text(vec![TextSpan::new(text)])
+                .font(size)
+                .color(t.on_surface)
+                .width(Length::Fill)
+                .wrap(token::PUBLIC_TEXT_LINES as usize)
+        };
+        let mut public = Vec::new();
+        if !compact {
+            public.push(Element::text("LUCENT").font(font::CAPTION).color(t.primary));
+        }
+        public.push(
             Element::text(title)
                 .font(token::TITLE_SIZE)
                 .color(t.on_surface)
                 .wrap(2),
-            Element::text(if self.mode != Mode::Login {
+        );
+        if self.mode == Mode::Authorization && !self.authorization.is_empty() {
+            public.push(public_copy(&self.authorization, font::BODY));
+        }
+        public.push(public_copy(
+            if self.mode != Mode::Login {
                 &self.identity
             } else {
                 "Your desktop, ready when you are"
-            })
-            .font(font::BODY)
-            .color(t.on_surface),
-            Element::text(label)
-                .font(font::BODY)
+            },
+            font::BODY,
+        ));
+        if username_step || self.prompt.is_some() || self.status.is_empty() {
+            public.push(public_copy(label, font::BODY));
+        }
+        if !self.status.is_empty() {
+            public.push(public_copy(&self.status, font::CAPTION));
+        }
+        let field = if username_step {
+            t.text_input(
+                self.identity.clone(),
+                self.identity_selection,
+                "Username",
+                Message::Identity,
+            )
+            .id("authentication-input")
+            .autofocus()
+            .on_submit(Message::Submit)
+        } else if self.input_enabled() {
+            let field = if self
+                .prompt
+                .as_ref()
+                .is_some_and(|p| p.kind == PromptKind::Visible)
+            {
+                // The authentication backend explicitly requests an echoed response.
+                Element::input(self.secret.expose(), "", |text| {
+                    Message::Response(InputEdit::Replace(text))
+                })
+            } else {
+                Element::masked_input(self.secret.len(), "", Message::Response)
+            };
+            field
+                .font(token::INPUT_SIZE)
                 .color(t.on_surface)
-                .wrap(3),
-            if username_step {
-                t.text_input(
-                    self.identity.clone(),
-                    self.identity_selection,
-                    "Username",
-                    Message::Identity,
+                .width(Length::Fill)
+                .height(Length::Fixed(token::INPUT_HEIGHT))
+                .padding_xy(
+                    lucent_design::component::input::PADDING_INLINE,
+                    lucent_design::component::input::PADDING_BLOCK,
                 )
+                .background(t.surface_container)
+                .radius(radius::CONTROL)
+                .clip()
                 .id("authentication-input")
                 .autofocus()
                 .on_submit(Message::Submit)
-            } else if self.input_enabled() {
-                let field = if self
-                    .prompt
-                    .as_ref()
-                    .is_some_and(|p| p.kind == PromptKind::Visible)
-                {
-                    // The authentication backend explicitly requests an echoed response.
-                    Element::input(self.secret.expose(), "", |text| {
-                        Message::Response(InputEdit::Replace(text))
-                    })
-                } else {
-                    Element::masked_input(self.secret.len(), "", Message::Response)
-                };
-                field
-                    .font(token::INPUT_SIZE)
-                    .color(t.on_surface)
-                    .width(Length::Fill)
-                    .height(Length::Fixed(token::INPUT_HEIGHT))
-                    .padding_xy(
-                        lucent_design::component::input::PADDING_INLINE,
-                        lucent_design::component::input::PADDING_BLOCK,
-                    )
-                    .background(t.surface_container)
-                    .radius(radius::CONTROL)
-                    .clip()
-                    .id("authentication-input")
-                    .autofocus()
-                    .on_submit(Message::Submit)
-            } else {
-                Element::text(" ")
-                    .font(token::INPUT_SIZE)
-                    .color(t.on_surface)
-                    .width(Length::Fill)
-                    .height(Length::Fixed(token::INPUT_HEIGHT))
-                    .padding_xy(
-                        lucent_design::component::input::PADDING_INLINE,
-                        lucent_design::component::input::PADDING_BLOCK,
-                    )
-                    .background(t.surface_container)
-                    .radius(radius::CONTROL)
-                    .id("authentication-input")
-            },
-        ];
+        } else {
+            Element::text(" ")
+                .font(token::INPUT_SIZE)
+                .color(t.on_surface)
+                .width(Length::Fill)
+                .height(Length::Fixed(token::INPUT_HEIGHT))
+                .padding_xy(
+                    lucent_design::component::input::PADDING_INLINE,
+                    lucent_design::component::input::PADDING_BLOCK,
+                )
+                .background(t.surface_container)
+                .radius(radius::CONTROL)
+                .id("authentication-input")
+        };
+        let mut actions = Vec::new();
         if self.mode == Mode::Authorization {
-            children.insert(
-                2,
-                Element::text(&self.authorization)
-                    .font(font::BODY)
-                    .color(t.on_surface)
-                    .wrap(4),
-            );
-            children.push(
+            actions.push(
                 t.button("Cancel", Message::Cancel)
+                    .height(Length::Fixed(token::ACTION_HEIGHT))
+                    .width(Length::Fill)
                     .id("authorization-cancel"),
             );
         }
         if self.input_enabled() {
-            children.push(
+            actions.push(
                 t.button(
                     if username_step {
                         "Continue"
@@ -235,25 +266,63 @@ impl Component for SessionScreen {
                     Message::Submit,
                 )
                 .width(Length::Fill)
+                .height(Length::Fixed(token::ACTION_HEIGHT))
                 .background(t.primary)
                 .color(t.on_primary)
                 .id("authentication-submit"),
             );
         }
         if self.mode == Mode::Lock && self.attempt.is_none() && !self.verified {
-            children.push(
+            actions.push(
                 t.button("Try again", Message::Retry)
+                    .height(Length::Fixed(token::ACTION_HEIGHT))
+                    .width(Length::Fill)
                     .id("authentication-retry"),
             );
         }
-        children.push(
-            Element::text(&self.status)
-                .font(font::CAPTION)
-                .color(t.on_surface)
+        let width = token::WIDTH.min((cx.width - margin * 2.).max(0.));
+        let height = token::HEIGHT.min((cx.height - margin * 2.).max(0.));
+        let public_height =
+            (height - padding * 2. - token::INPUT_HEIGHT - token::ACTION_HEIGHT - gap * 2.).max(0.);
+        let epoch = self.public_scroll_epoch;
+        let public = Element::scroll(
+            ScrollSpec::new(
+                self.public_scroll,
+                lucent_design::component::scroll::LINE_STEP,
+            )
+            .expect("validated public scroll"),
+            Element::column(public).width(Length::Fill).gap(if compact {
+                space::XS
+            } else {
+                space::LG
+            }),
+            move |event| Message::PublicScroll {
+                epoch,
+                offset: event.offset,
+            },
+        )
+        .id(format!("authentication-public-{epoch}"))
+        .width(Length::Fill)
+        .height(Length::Shrink)
+        .max_height(public_height)
+        .scroll_style(t.scroll_style());
+        let card = Element::column(vec![
+            public,
+            field
                 .width(Length::Fill)
-                .wrap(3),
-        );
-        let width = token::WIDTH.min(cx.width - space::XL * 2.);
+                .height(Length::Fixed(token::INPUT_HEIGHT)),
+            Element::row(actions)
+                .width(Length::Fill)
+                .height(Length::Fixed(token::ACTION_HEIGHT))
+                .gap(gap),
+        ])
+        .gap(gap)
+        .padding(padding)
+        .width(Length::Fixed(width))
+        .id("authentication-card")
+        .radius(radius::PANEL)
+        .background(t.surface_container)
+        .shadow();
         let mut layers = Vec::new();
         if let Some(wallpaper) = &self.wallpaper {
             layers.push(
@@ -264,17 +333,13 @@ impl Component for SessionScreen {
             );
         }
         layers.push(
-            Element::column(children)
-                .gap(space::LG)
-                .padding(token::PADDING)
-                .width(Length::Fixed(width))
-                .at(
-                    (cx.width - width) / 2.,
-                    (cx.height - token::HEIGHT).max(space::XL) / 2.,
-                )
-                .radius(radius::PANEL)
-                .background(t.surface_container)
-                .shadow(),
+            Element::column(vec![
+                Element::empty().height(Length::Fill),
+                card,
+                Element::empty().height(Length::Fill),
+            ])
+            .fill()
+            .align(Align::Center),
         );
         t.apply(
             Element::stack(layers)
@@ -307,7 +372,13 @@ impl Component for SessionScreen {
                 }
             }
             Message::Wallpaper(image) => self.wallpaper = image,
+            Message::PublicScroll { epoch, offset }
+                if epoch == self.public_scroll_epoch && offset.is_finite() && offset >= 0. =>
+            {
+                self.public_scroll = offset;
+            }
             Message::Prompt(prompt) => {
+                self.reset_public_scroll();
                 self.secret.clear();
                 if matches!(prompt.kind, PromptKind::Information | PromptKind::Error) {
                     self.status = prompt.text;
@@ -317,6 +388,7 @@ impl Component for SessionScreen {
                 }
             }
             Message::Finished(result) => {
+                self.reset_public_scroll();
                 self.attempt = None;
                 self.secret.clear();
                 self.prompt = None;
@@ -347,6 +419,7 @@ impl Component for SessionScreen {
                 {
                     let answer = std::mem::take(&mut self.secret);
                     if attempt.send.try_send(answer).is_ok() {
+                        self.reset_public_scroll();
                         self.prompt = None;
                         self.status = "Verifying…".into();
                     }
@@ -512,8 +585,13 @@ impl api::Application for SessionScreen {
         subscriptions
     }
     fn event(&self, event: Event) -> Option<Message> {
+        // Disabled fields have no hit. Let navigation and Cancel activation
+        // reach the toolkit while connecting/verifying, as in the active form.
         match event {
-            Event::Key { key, .. } if key == Key::Escape || !self.input_enabled() => {
+            Event::Key { key, .. }
+                if key == Key::Escape
+                    || (key == Key::Enter && self.mode == Mode::Lock && self.attempt.is_none()) =>
+            {
                 Some(Message::Key(key))
             }
             _ => None,
@@ -525,6 +603,9 @@ impl lucent_wayland::LockApplication for SessionScreen {
         self.mode == Mode::Lock && self.verified
     }
 }
+
+#[cfg(test)]
+mod presentation_tests;
 
 #[cfg(test)]
 mod tests {

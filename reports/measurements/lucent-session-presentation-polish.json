@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-18",
+  "status": "source_prepared_hosted_checks_pending",
+  "scope": "Shared lock, login and authorization presentation on short outputs and long public prompts; authentication authority is unchanged.",
+  "changes": [
+    "Naturally sized centered cards use the existing 460-pixel maximum and actual output margins.",
+    "Public RichText blocks scroll with a 128 rendered-line cap while the 48-pixel field and 40-pixel action row remain visible.",
+    "Compact output spacing omits decorative branding and leaves a 96-pixel public viewport at 320 by 240.",
+    "Public scroll callbacks and viewport identities retire together on prompt or attempt transitions, while typing and wallpaper updates preserve the offset.",
+    "Disabled connecting and verifying forms retain toolkit keyboard navigation to authorization Cancel."
+  ],
+  "toolkit": {
+    "new_public_api": false,
+    "reused": ["RichText per-line painting", "controlled ScrollSpec", "max_height intrinsic viewport", "toolkit focus and pointer routing"],
+    "independent_consumer": "lucent/examples/scroll-list"
+  },
+  "validation": {
+    "rust_execution_pending": true,
+    "hosted_visuals_pending": true,
+    "native_vm_pending": true,
+    "visual_fixture_families_added": 11,
+    "visual_theme_density_combinations_per_family": 4,
+    "baseline_promotion_performed": false,
+    "local_Rust_compilation_performed": false,
+    "local_rendering_performed": false,
+    "formatting_passed": true,
+    "diff_check_passed": true,
+    "architecture_cases_passed": 27,
+    "design_token_cases_passed": 4,
+    "generated_tokens_verified": 596,
+    "new_Rust_cases_prepared": 16,
+    "existing_session_Rust_cases_retained": 8,
+    "coverage_prepared": [
+      "Short-output initial public copy, fixed field and actions, and natural centering in lock, login and authorization.",
+      "Actual keyboard and pointer activation, disabled-field focus retirement and authorization cancellation.",
+      "Long public text tail reachability beyond an ordinary 1024-physical-pixel raster and honest truncation at the public line bound.",
+      "Stale public scrolling, equal-geometry thumb retirement and zeroizing secret count-only presentation."
+    ]
+  },
+  "vm_started": false,
+  "native_accepted": false,
+  "full_polish_goal_complete": false
+}

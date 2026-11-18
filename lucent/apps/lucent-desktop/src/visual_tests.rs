@@ -1984,6 +1984,41 @@ fn visual_regressions() {
             ("lock", Mode::Apps, 0, 0, "", 1., 640.),
             ("greeter", Mode::Apps, 0, 0, "", 1., 640.),
             ("authorization", Mode::Apps, 0, 0, "", 1., 640.),
+            ("session-lock-small", Mode::Apps, 0, 0, "", 1., 320.),
+            ("session-greeter-small", Mode::Apps, 0, 0, "", 1., 320.),
+            (
+                "session-authorization-small",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                320.,
+            ),
+            ("session-lock-long", Mode::Apps, 0, 0, "", 1., 320.),
+            ("session-greeter-long", Mode::Apps, 0, 0, "", 1., 320.),
+            ("session-authorization-long", Mode::Apps, 0, 0, "", 1., 320.),
+            ("session-lock-last", Mode::Apps, 0, 0, "", 1., 320.),
+            ("session-greeter-last", Mode::Apps, 0, 0, "", 1., 320.),
+            ("session-authorization-last", Mode::Apps, 0, 0, "", 1., 320.),
+            (
+                "session-authorization-connecting",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                320.,
+            ),
+            (
+                "session-authorization-verifying",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                320.,
+            ),
             ("osd", Mode::Apps, 0, 0, "", 1., 640.),
             ("menu", Mode::Apps, 0, 0, "", 1., 960.),
             ("menu-last-narrow", Mode::Apps, 0, 22, "", 1., 390.),
@@ -2294,7 +2329,7 @@ fn visual_regressions() {
                 320.
             } else if name.starts_with("notification-toast-small") {
                 280.
-            } else if name.starts_with("system-") {
+            } else if name.starts_with("system-") || name.starts_with("session-") {
                 240.
             } else if name.starts_with("launcher-size-") {
                 1080.
@@ -2777,10 +2812,12 @@ fn visual_regressions() {
                     &Interaction::default(),
                     now,
                 )
-            } else if matches!(name, "lock" | "greeter" | "authorization") {
-                let mode = if name == "lock" {
+            } else if matches!(name, "lock" | "greeter" | "authorization")
+                || name.starts_with("session-")
+            {
+                let mode = if name == "lock" || name.starts_with("session-lock-") {
                     lucent_session::Mode::Lock
-                } else if name == "authorization" {
+                } else if name == "authorization" || name.starts_with("session-authorization-") {
                     lucent_session::Mode::Authorization
                 } else {
                     lucent_session::Mode::Login
@@ -2792,8 +2829,18 @@ fn visual_regressions() {
                 )
                 .with_theme(light)
                 .with_authorization(
-                    "Authentication is required to change this system setting".into(),
+                    if name.starts_with("session-") {
+                        "Allow system changes"
+                    } else {
+                        "Authentication is required to change this system setting"
+                    }
+                    .into(),
                 );
+                let long = name.ends_with("-long") || name.ends_with("-last");
+                lucent_api::Application::init(&mut session, &mut Effects::default());
+                if mode == lucent_session::Mode::Login && long {
+                    session.update(lucent_session::Message::Submit, &mut Effects::default());
+                }
                 // Original deterministic landscape gradient, never a private VM image.
                 let mut pixels = Vec::new();
                 for y in 0..180u32 {
@@ -2813,11 +2860,20 @@ fn visual_regressions() {
                     ))),
                     &mut Effects::default(),
                 );
-                if matches!(name, "lock" | "authorization") {
+                if long || (mode != lucent_session::Mode::Login && !name.ends_with("-connecting")) {
                     session.update(
                         lucent_session::Message::Prompt(lucent_domain::AuthPrompt {
                             kind: lucent_domain::PromptKind::Secret,
-                            text: "Password:".into(),
+                            text: if long {
+                                let mut text = String::from("Password instructions\n");
+                                for line in 1..60 {
+                                    text.push_str(&format!("Public instruction {line:02}\n"));
+                                }
+                                text.push_str("END — Enter your password");
+                                text
+                            } else {
+                                "Password:".into()
+                            },
                         }),
                         &mut Effects::default(),
                     );
@@ -2825,6 +2881,9 @@ fn visual_regressions() {
                         lucent_session::Message::Key(Key::Text("fixture".into())),
                         &mut Effects::default(),
                     );
+                }
+                if name.ends_with("-verifying") {
+                    session.update(lucent_session::Message::Submit, &mut Effects::default());
                 }
                 let cx = ViewContext {
                     surface: "lock",
@@ -2834,11 +2893,49 @@ fn visual_regressions() {
                     now,
                     density: lucent_api::Density::ONE,
                 };
+                let mut session_input = Interaction::default();
+                let initial = layout.build(&session.view(&cx), width, height, &session_input, now);
+                session_input.synchronize(&initial);
+                if name.ends_with("-last") {
+                    for key in [Key::BackTab, Key::End] {
+                        let scene =
+                            layout.build(&session.view(&cx), width, height, &session_input, now);
+                        session_input.synchronize(&scene);
+                        let messages = lucent_api::Application::event(
+                            &session,
+                            Event::Key {
+                                surface: "lock",
+                                key: key.clone(),
+                            },
+                        )
+                        .map(|message| vec![message])
+                        .unwrap_or_else(|| session_input.key(&scene, &key));
+                        for message in messages {
+                            session.update(message, &mut Effects::default());
+                        }
+                    }
+                }
                 let tree = session.view(&cx).map(|_| Message::Quit);
                 let mut input = Interaction::default();
                 let initial = layout.build(&tree, width, height, &input, now);
                 input.synchronize(&initial);
-                layout.build(&tree, width, height, &input, now)
+                let scene = layout.build(&tree, width, height, &input, now);
+                if name.starts_with("session-") {
+                    for hit in &scene.hits {
+                        assert!(fully_visible(hit.rect, hit.clip.bounds));
+                        assert!(fully_visible(hit.rect, Rect::new(0., 0., width, height)));
+                    }
+                }
+                if name.ends_with("-last") {
+                    assert!(
+                        scene.paint.iter().any(|paint| matches!(paint,
+                            Paint::Text { text, rect, clip, .. }
+                                if text.contains("END") && fully_visible(*rect, clip.bounds)
+                        )),
+                        "session tail must be reached through actual keyboard scrolling"
+                    );
+                }
+                scene
             } else if name.starts_with("catalog-") || name.starts_with("dock-") {
                 let mut effects = Effects::default();
                 if name.starts_with("catalog-") {

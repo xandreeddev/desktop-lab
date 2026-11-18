@@ -384,6 +384,8 @@
   --component-authentication-title-size: var(--font-heading);
   --component-authentication-input-size: var(--font-body);
   --component-authentication-input-height: var(--component-input-height);
+  --component-authentication-action-height: 40px;
+  --component-authentication-public-text-lines: 128;
   --component-menu-width: 800px;
   --component-menu-min-width: 320px;
   --component-menu-height: 560px;

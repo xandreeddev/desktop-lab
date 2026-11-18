@@ -177,8 +177,9 @@
         "Preserve pending display apply cancellation across close then reopen before admission returns.",
         "Verify authentication control reachability on short outputs and long prompts before presentation-only changes; preserve all secure authority."
       ],
-      "active_slice": "Display confirmations passed hosted behavior checks; session presentation remains queued.",
-      "report": "reports/measurements/lucent-display-confirmation-polish.json"
+      "active_slice": "Shared session cards now have bounded scrolling public copy, fixed input/actions and compact output spacing; source tests and hosted behavior/visual verification are in progress.",
+      "report": "reports/measurements/lucent-display-confirmation-polish.json",
+      "session_report": "reports/measurements/lucent-session-presentation-polish.json"
     },
     {
       "id": "resources-and-motion",
