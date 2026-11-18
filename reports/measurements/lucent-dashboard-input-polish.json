@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-11-18",
-  "status": "implementation_ready_for_hosted_checks",
+  "status": "hosted_behavior_and_visual_review_passed_baseline_rerun_pending",
   "scope": "Hidden Notes input retirement and pending media seek lifetimes.",
   "changes": [
     "Hidden Notes reject edits, selection, clipboard requests and scroll callbacks for their own output while retaining shared text.",
@@ -13,7 +13,7 @@
     "formatting_passed": true,
     "diff_check_passed": true,
     "architecture_cases_passed": 26,
-    "rust_execution_pending": true,
+    "rust_execution_pending": false,
     "hosted_visuals_pending": true,
     "native_vm_pending": true,
     "coverage": [
@@ -23,7 +23,30 @@
       "Stable passive slider paint geometry with retired focus/capture, and globally available closed-panel controls.",
       "Sending/Waiting status stays visible with artwork and long metadata at640x580,390x420,320x420.",
       "New media-pending Vulkan fixture at both palettes and densities."
-    ]
+    ],
+    "reviewed_hosted_result": {
+      "source_commit": "fdfd75d72688317f3be8120b2c8e7a4abc5f456e",
+      "run_id": 44271588578,
+      "run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/44271588578",
+      "job_id": 134689435085,
+      "workspace_tests_passed": 1185,
+      "service_protocol_cases_passed": 49,
+      "strict_clippy_passed": true,
+      "site_passed": true,
+      "integration_passed": true,
+      "arch_bundle_build_passed": true,
+      "visual_step_passed": false,
+      "visual_cases": 852,
+      "previous_baseline_passes": 828,
+      "reviewed_intentional_differences": 24,
+      "visual_artifact_id": 14414047171,
+      "visual_archive_sha256": "203d479bea506977269497808d43a0461783cc5cf2a72506f7f849561f358512",
+      "all_case_pngs_crc_verified": true,
+      "visual_receipt": ".cache/launcher-polish-checks/ci-visual-fdfd75d72688-14414047171/receipt.json",
+      "raw_log": ".cache/launcher-polish-checks/dashboard-rust-fdfd.log",
+      "baseline_rerun_pending": true
+    },
+    "visual_review": "Reviewed all24 changed/new actual images and four ordinary-toast diffs across dark/light and1x/2x. Shadow/gutter and primary-label issues corrected; pending media status remains outside scrolling metadata."
   },
   "vm_started": false,
   "native_accepted": false,

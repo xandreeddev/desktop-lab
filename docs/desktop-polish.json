@@ -98,7 +98,7 @@
     },
     {
       "id": "notifications",
-      "status": "hosted_validation_in_progress",
+      "status": "hosted_behavior_and_visual_review_passed_baseline_rerun_pending",
       "behavior": "Toasts and history have readable content, reachable actions, reliable DND and grouping, safe links and consistent keyboard navigation.",
       "toolkit": "Optional maximum outer height and intrinsically sized bounded scroll viewports; desktop-owned toast/history state and limits.",
       "report": "reports/measurements/lucent-notification-polish.json",

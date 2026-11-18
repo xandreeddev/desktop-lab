@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-11-18",
-  "status": "hosted_behavior_passed_visual_refinement_pending",
+  "status": "hosted_behavior_and_visual_review_passed_baseline_rerun_pending",
   "scope": "Notification toast reachability, bounded metadata and reconciled history navigation.",
   "changes": [
     "Plain toasts use naturally sized scroll viewports bounded by available screen room.",
@@ -64,7 +64,30 @@
       "visual_issue": "Plain toast viewport exposed a contrasting gutter and clipped the card shadow. Move surface/shadow ownership to the plain viewport and review fresh output before accepting baselines.",
       "additional_visual_issue": "Nested narrow history cards squeezed the primary action label beside Next action. Stack the full-width primary action above its compact pager; verify both controls after End on short outputs.",
       "reviewed_new_fixture_cases": 16
-    }
+    },
+    "reviewed_hosted_result": {
+      "source_commit": "fdfd75d72688317f3be8120b2c8e7a4abc5f456e",
+      "run_id": 44271588578,
+      "run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/44271588578",
+      "job_id": 134689435085,
+      "workspace_tests_passed": 1185,
+      "service_protocol_cases_passed": 49,
+      "strict_clippy_passed": true,
+      "site_passed": true,
+      "integration_passed": true,
+      "arch_bundle_build_passed": true,
+      "visual_step_passed": false,
+      "visual_cases": 852,
+      "previous_baseline_passes": 828,
+      "reviewed_intentional_differences": 24,
+      "visual_artifact_id": 14414047171,
+      "visual_archive_sha256": "203d479bea506977269497808d43a0461783cc5cf2a72506f7f849561f358512",
+      "all_case_pngs_crc_verified": true,
+      "visual_receipt": ".cache/launcher-polish-checks/ci-visual-fdfd75d72688-14414047171/receipt.json",
+      "raw_log": ".cache/launcher-polish-checks/dashboard-rust-fdfd.log",
+      "baseline_rerun_pending": true
+    },
+    "visual_review": "Reviewed all24 changed/new actual images and four ordinary-toast diffs across dark/light and1x/2x. Shadow/gutter and primary-label issues corrected; pending media status remains outside scrolling metadata."
   },
   "vm_started": false,
   "native_accepted": false,
