@@ -112,17 +112,46 @@ python3 vm/measure-daily-resources.py \
 
 The collector refuses a mismatched running/installed executable, a replacement
 process, changed settings bytes/inode, output changes or a changed playback
-generation/target. Every inspector poll also rejects open/busy panels (including
-Display and application actions), notification history, pending preference saves
-and wallpaper preparation. An older inspector without optional presentation or
-source-frame trace fields can still supply an uninstrumented resource baseline;
-missing traces remain missing. It samples Linux process RSS/CPU every 250 ms, captures
+generation/target. Admission, every inspector poll and the final inspection reject
+open/busy panels (including Display and application actions), notification history,
+pending preference saves, wallpaper preparation and output refitting, active or
+retiring live-preview workers, unsettled background transitions and retained native
+surface replacements. These checks run before the owned sampler starts; a failed
+poll terminates and reaps only that sampler. It samples Linux process RSS/CPU every 250 ms, captures
 smaps_rollup before/after and observes bounded presentation histories every
-500 ms, retaining at most 16,384 host samples across at most 64 surfaces and
-explicitly reporting truncation. It does not restart the VM/shell, change wallpapers/preferences, open
+500 ms, retaining at most 16,384 host samples across at most 64 surfaces. An
+oversized inventory or inspection history is rejected, while reaching the retained
+sample cap is explicitly reported as truncation. It does not restart the VM/shell, change wallpapers/preferences, open
 panels or send native input. Reports are private mode 0600 until reviewed.
 CPU-stage profiling must be disabled for normal-resource samples. Optional
 presentation instrumentation and inspection overhead are recorded explicitly.
+
+Schema 2 reports include the admitted `surface_inventory`. Surface maps use
+canonical JSON objects with `role` and `instance` fields, or a separate `legacy_id`
+object for older inspectors. A diagnostic display label cannot merge different
+typed addresses. Duplicate addresses, changed inventory membership and changed
+native generations reject the observation, even if an intermediate change would
+have returned to the original endpoint state. The entire inventory is checked
+before adding feedback or computing submission deltas.
+
+Only a complete typed address with a positive native generation supplies
+presentation cadence. Older generations retained in a current logical history
+are skipped; future or missing sample generations reject it. Repeated identical
+records are idempotent, while a changed timestamp, clock, flags or stream reference
+for the same generation/frame rejects the batch before retained samples change.
+Older inspectors and modern surfaces with null or missing native generations can
+still supply resource and logical submission observations. Their histories are
+skipped, their native lifetime continuity remains unverified, and they never
+supply a synthesized presentation rate. Skip counts describe history rows observed
+across inspections, including repeats, rather than unique frames or decoder drops.
+Missing source traces remain missing. Snapshot checks cannot rule out transitions
+that occur entirely between polls.
+
+The [collector policy report](../reports/measurements/lucent-resource-measurement-polish.json)
+records 29 passing owned Python fixtures, including fully mocked entry-point
+admission, interruption, sampler cleanup and report rejection. These tests execute
+no SSH command, sampler, VM operation, Rust build or renderer. Actual matched native
+resource and pacing measurements remain deferred under the user's memory hold.
 
 Use `vm/measure-framework.py --presentation` for a separate guarded startup and
 launcher interaction pass. Its first open/close pair is labeled

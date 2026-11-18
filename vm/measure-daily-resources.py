@@ -23,6 +23,8 @@ import time
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SURFACE_LIMIT = 64
+SAMPLE_LIMIT = 16_384
 
 
 def load_helpers():
@@ -128,34 +130,104 @@ def presentation_intervals(samples):
 
 
 def surface_key(surface):
-    return surface['id']
+    """Diagnostic Display strings are not injective typed surface addresses."""
+    typed = 'role' in surface or 'instance' in surface
+    if typed:
+        assert 'role' in surface and 'instance' in surface, 'Incomplete typed surface address'
+        role, instance = surface['role'], surface['instance']
+        assert isinstance(role, str) and role, 'Invalid surface role'
+        assert instance is None or (isinstance(instance, str) and instance), 'Invalid surface instance'
+        address = {'role': role, 'instance': instance}
+        return json.dumps(address, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    assert isinstance(surface.get('id'), str) and surface['id'], 'Missing legacy surface ID'
+    return json.dumps({'legacy_id': surface['id']}, ensure_ascii=False, separators=(',', ':'))
 
 
-def collect_presentations(storage, snapshot, since=0, limit=16_384):
-    # Bound host collection as well as runtime histories. A long or many-output
-    # workload cannot grow this helper without limit; truncation is explicit.
-    count = sum(len(values) for values in storage.values())
-    truncated = False
+def surface_inventory(snapshot):
+    """Admit every address before collection, even when it has no feedback."""
+    surfaces = snapshot['surfaces']
+    assert isinstance(surfaces, list) and len(surfaces) <= SURFACE_LIMIT, 'Surface inventory exceeds its bound'
+    inventory = {}
+    for surface in surfaces:
+        key = surface_key(surface)
+        assert key not in inventory, 'Duplicate surface address: '+key
+        generation = surface.get('native_generation')
+        assert generation is None or (type(generation) is int and 0 < generation < 2**64), 'Invalid native generation'
+        typed = 'role' in surface
+        inventory[key] = {
+            'address': {'role': surface['role'], 'instance': surface['instance']} if typed else {'legacy_id': surface['id']},
+            'native_generation': generation,
+            'presentation_identity_verified': typed and generation is not None,
+        }
+    return inventory
+
+
+def assert_surface_inventory(snapshot, inventory):
+    assert surface_inventory(snapshot) == inventory, 'Surface membership, address or native generation changed'
+
+
+def collect_presentations(storage, snapshot, inventory, since=0, limit=SAMPLE_LIMIT):
+    # Validate the entire inventory and history before touching retained data.
+    # A bad later surface/sample cannot partially admit an earlier one.
+    assert_surface_inventory(snapshot, inventory)
+    assert type(limit) is int and 0 <= limit <= SAMPLE_LIMIT
+    candidates = {}
+    skipped = {'old_generation_history_observations_skipped': 0,
+               'unverified_history_observations_skipped': 0}
+    observed = 0
     for surface in snapshot['surfaces']:
         key = surface_key(surface)
-        if key not in storage and len(storage) >= 64:
-            truncated = True
+        identity = inventory[key]
+        history = surface.get('presentation', {}).get('samples', [])
+        assert isinstance(history, list), 'Invalid presentation history'
+        observed += len(history)
+        assert observed <= SAMPLE_LIMIT, 'Presentation snapshot exceeds its bound'
+        if not identity['presentation_identity_verified']:
+            skipped['unverified_history_observations_skipped'] += len(history)
             continue
+        values = candidates.setdefault(key, {})
+        for sample in history:
+            generation = sample.get('native_generation')
+            assert type(generation) is int and 0 < generation <= identity['native_generation'], 'Missing, invalid or future presentation generation'
+            if generation < identity['native_generation']:
+                skipped['old_generation_history_observations_skipped'] += 1
+                continue
+            frame = sample['frame']
+            assert type(frame) is int and frame >= 0, 'Invalid presentation frame'
+            requested = sample['requested_at_ms']
+            assert type(requested) in (int, float) and math.isfinite(requested) and requested >= 0, 'Invalid presentation request time'
+            previous = values.get(frame, storage.get(key, {}).get(frame))
+            assert previous is None or previous == sample, 'Presentation association changed within one native generation'
+            # Check duplicate consistency before interval filtering or truncation.
+            values[frame] = sample
+
+    count = sum(len(values) for values in storage.values())
+    truncated = False
+    for key, candidates_for_surface in candidates.items():
         values = storage.setdefault(key, {})
-        for sample in surface.get('presentation', {}).get('samples', []):
+        for frame, sample in candidates_for_surface.items():
             if sample['requested_at_ms'] < since:
                 continue
-            if sample['frame'] not in values:
+            if frame not in values:
                 if count >= limit:
                     truncated = True
                     continue
                 count += 1
-            values[sample['frame']] = sample
-    return truncated
+            values[frame] = sample
+    return dict(skipped, truncated=truncated)
 
 
+def submission_counts(snapshot, inventory):
+    assert_surface_inventory(snapshot, inventory)
+    counts = {}
+    for surface in snapshot['surfaces']:
+        count = surface['frames']
+        assert type(count) is int and count >= 0, 'Invalid submission count'
+        counts[surface_key(surface)] = count
+    return counts
 
-def collect_sources(storage, snapshot, limit=16_384):
+
+def collect_sources(storage, snapshot, limit=SAMPLE_LIMIT):
     truncated = False
     for producer in snapshot['client']['live_wallpaper']['producers']:
         for sample in (producer.get('source_frames') or {}).get('samples', []):
@@ -245,16 +317,36 @@ def assert_idle_snapshot(snapshot, phase):
     assert client['background_ready'] and not client['wallpaper_busy'], 'Wait for the wallpaper to settle'
     assert not client['launcher'] and not client['widgets_editing'], 'Close the launcher and widget editor'
     assert not snapshot.get('frame_profiling', False), 'Separate CPU-stage profiling from normal resources'
+    assert not snapshot.get('retiring_native_surfaces', 0), 'Wait for native surface replacement to settle'
     for name in ('audio', 'media', 'network', 'bluetooth', 'power', 'tray', 'settings',
                  'weather', 'displays', 'application_actions'):
         panel = client.get(name, {})
         assert not any(panel.get(key, False) for key in ('open', 'visible', 'busy', 'refreshing')), 'Close and settle panels before sampling: '+name
     assert not client.get('notification_history_open', False), 'Close notification history'
     assert not client.get('wallpaper_browser', {}).get('busy', False), 'Wait for wallpaper searches/imports'
+    assert not client.get('wallpaper_presentation', {}).get('busy', False), 'Wait for wallpaper output refitting'
+    for background in client.get('background_transitions', []):
+        presentation = background['presentation']
+        assert not any(presentation.get(key, False) for key in ('transition_pending', 'awaiting_first_frame')), 'Wait for background transitions to settle'
     assert client.get('settings_save_status') not in ('saving', 'retrying'), 'Wait for preference persistence'
     live = client['live_wallpaper']
     assert not any(live.get(key, False) for key in ('open', 'importing', 'awaiting_first_frame', 'library_loading')), 'Wait for live wallpaper preparation'
+    assert not any(live.get('preview', {}).get(key, False) for key in ('active', 'retiring', 'loading')), 'Wait for live wallpaper preview workers to retire'
     assert bool(live['running']) == (phase == 'animated-background'), 'Prepared phase does not match actual playback'
+
+
+def assert_matched_snapshot(snapshot, phase, inventory, producers):
+    assert_idle_snapshot(snapshot, phase)
+    assert_surface_inventory(snapshot, inventory)
+    assert producer_identities(snapshot) == producers, 'Playback generation/target changed'
+
+
+def collect_snapshot(samples, sources, snapshot, inventory, since, totals):
+    result = collect_presentations(samples, snapshot, inventory, since)
+    totals['presentation_truncated'] |= result['truncated']
+    totals['source_truncated'] |= collect_sources(sources, snapshot)
+    for key in ('old_generation_history_observations_skipped', 'unverified_history_observations_skipped'):
+        totals[key] += result[key]
 
 
 def private(path, value):
@@ -283,6 +375,18 @@ def main():
     assert session('omarchy-shell', 'lock', 'isLocked').strip() == 'false', 'Unlock the guest first'
     before = inspect()
     assert_idle_snapshot(before, args.phase)
+    inventory = surface_inventory(before)
+    producers = producer_identities(before)
+    frames_before = submission_counts(before, inventory)
+    samples = {}
+    sources = {}
+    totals = {'presentation_truncated': False, 'source_truncated': False,
+              'old_generation_history_observations_skipped': 0,
+              'unverified_history_observations_skipped': 0}
+    since = before['uptime_ms']
+    # Initial history and identities must be admissible before starting even
+    # the read-only sampler process. Loading this module never contacts a VM.
+    collect_snapshot(samples, sources, before, inventory, since, totals)
     live = before['client']['live_wallpaper']
     pid_text = remote('pgrep', '-x', 'lucent-desktop').splitlines()
     assert len(pid_text) == 1
@@ -290,63 +394,67 @@ def main():
     displays = [{k: m.get(k) for k in ('width', 'height', 'scale', 'transform', 'refreshRate')} for m in monitors_before]
     command = ['python3', '-c', SAMPLER, pid_text[0], str(args.seconds), expected]
     process = subprocess.Popen(lab.ssh_args('lucent')+[shlex.join(command)], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    samples = {}
-    sources = {}
-    source_truncated = collect_sources(sources, before)
-    truncated = False
-    since = before['uptime_ms']
     try:
         while process.poll() is None:
             snapshot = inspect()
-            assert_idle_snapshot(snapshot, args.phase)
-            assert producer_identities(before) == producer_identities(snapshot), 'Playback generation/target changed'
-            truncated |= collect_presentations(samples, snapshot, since)
-            source_truncated |= collect_sources(sources, snapshot)
+            assert_matched_snapshot(snapshot, args.phase, inventory, producers)
+            collect_snapshot(samples, sources, snapshot, inventory, since, totals)
             time.sleep(.5)
         output, error = process.communicate(timeout=5)
         assert process.returncode == 0, 'Read-only guest sampler failed: '+error[-1000:]
-    except BaseException:
-        process.terminate()
-        try: process.communicate(timeout=5)
-        except subprocess.TimeoutExpired: process.kill(); process.communicate()
-        raise
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.communicate()
     resources = json.loads(output)
     after = inspect()
-    assert_idle_snapshot(after, args.phase)
-    truncated |= collect_presentations(samples, after, since)
-    source_truncated |= collect_sources(sources, after)
+    assert_matched_snapshot(after, args.phase, inventory, producers)
     assert remote('pgrep', '-x', 'lucent-desktop').strip() == pid_text[0]
     assert after['uptime_ms'] > since
     assert json.loads(session('hyprctl', '-j', 'monitors')) == monitors_before, 'Display state changed'
-    assert producer_identities(before) == producer_identities(after), 'Playback generation/target changed'
-    frames_before = {s['id']: s['frames'] for s in before['surfaces']}
-    frames_after = {s['id']: s['frames'] for s in after['surfaces']}
-    assert frames_before.keys() == frames_after.keys(), 'Surface membership changed'
+    frames_after = submission_counts(after, inventory)
     extra = {name: frames_after[name]-count for name, count in frames_before.items()}
     assert all(v >= 0 for v in extra.values())
-    result = {'schema': 1, 'label': args.label, 'phase': args.phase,
+    collect_snapshot(samples, sources, after, inventory, since, totals)
+    verified = sum(identity['presentation_identity_verified'] for identity in inventory.values())
+    result = {'schema': 2, 'label': args.label, 'phase': args.phase,
               'release_source_commit': source, 'release_manifest_sha256': hashlib.sha256(args.release_manifest.read_bytes()).hexdigest(),
               'harness_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               'displays': displays, 'adapter': before['adapter'], 'resources': resources,
               'cpu_stage_profiling': before.get('frame_profiling', False),
               'presentation_capture': after.get('presentation_feedback'),
-              'presentation_sampling_truncated': truncated,
-              'presentation_sample_limit': 16_384,
+              'surface_inventory': inventory, 'surface_limit': SURFACE_LIMIT,
+              'presentation_identity': {
+                  'verified_surfaces': verified,
+                  'unverified_surfaces': len(inventory)-verified,
+                  'old_generation_history_observations_skipped': totals['old_generation_history_observations_skipped'],
+                  'unverified_history_observations_skipped': totals['unverified_history_observations_skipped'],
+                  'scope': 'Only complete typed addresses with a positive native generation supply presentation cadence. Legacy or null/missing-generation surfaces supply resource and logical submission observations only; native lifetime continuity is unverified. Skip counts count observed history rows across polls, including repeats, not unique frames or decoder drops.'},
+              'presentation_sampling_truncated': totals['presentation_truncated'],
+              'presentation_sample_limit': SAMPLE_LIMIT,
               'presentation': {name: presentation_intervals(list(values.values())) for name, values in samples.items()},
               'stream_cadence': {name: stream_cadence(list(values.values()), sources) for name, values in samples.items()},
-              'source_trace_sampling_truncated': source_truncated,
-              'source_trace_samples': len(sources), 'source_trace_sample_limit': 16_384,
+              'source_trace_sampling_truncated': totals['source_truncated'],
+              'source_trace_samples': len(sources), 'source_trace_sample_limit': SAMPLE_LIMIT,
               'successful_submission_deltas': extra,
               'observation_uptime_ms': [since, after['uptime_ms']],
               'gpu_cache_before': before.get('gpu_cache'), 'gpu_cache_after': after.get('gpu_cache'),
               'prepared_assets_before': before['client'].get('prepared_assets'), 'prepared_assets_after': after['client'].get('prepared_assets'),
               'retained_video_frame_bytes': live['retained_frame_bytes'],
               'targets': {'normal_rss_mib': 300, 'interval_rss_target_met': resources['rss_mib_max_interval'] <= 300},
-              'preservation': {'settings_bytes_inode': True, 'process_and_installed_binary': True, 'output_state': True, 'playback_generation': True},
+              'preservation': {'settings_bytes_inode': True, 'process_and_installed_binary': True, 'output_state': True, 'playback_generation': True,
+                               'observed_surface_inventory': True,
+                               'all_surface_native_generations_verified': bool(inventory) and verified == len(inventory)},
               'scope': ['Read-only collection; prepare identical workload and release cohorts separately.',
                         'RSS samples include software-driver mappings. High-water RSS spans the process lifetime; GPU texture payload is not total GPU memory.',
                         'Compositor feedback is separate from successful CPU-side submissions. No hardware scanout or 60 unique video frames per second is inferred.',
                         'If presentation sampling is truncated, cadence covers retained samples only, not the complete resource interval.',
+                        'Schema 2 surface maps use typed canonical JSON role/instance keys or a separate legacy-ID namespace. Diagnostic display labels never identify typed surfaces.',
+                        'Inventory and idle continuity are checked at observed snapshots; transitions entirely between polls are not ruled out. Legacy/null native generations cannot establish native lifetime continuity.',
                         'Inspection every 0.5 seconds and optional instrumentation can affect the measured workload. Compare uninstrumented resource samples separately.']}
     path = ROOT/'reports/local'/('daily-resources-'+args.label+'.json')
     path.parent.mkdir(parents=True, exist_ok=True)

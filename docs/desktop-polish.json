@@ -184,14 +184,16 @@
     },
     {
       "id": "resources-and-motion",
-      "status": "queued",
+      "status": "source_prepared_hosted_checks_pending",
       "behavior": "Verify cold/warm interaction cost and presentation, including resize/return-to-FHD memory, against the existing resource targets.",
       "toolkit": "Measured renderer/resource ownership and compositor pacing; keep resource checks part of each preceding feature as well.",
       "identified_work": [
-        "Reject retiring live-preview decoders and unsettled background transitions before and throughout an idle resource observation.",
-        "Bind presentation collection to the admitted surface/native generation; reject conflicting duplicate samples and retain explicit legacy-unverified scope."
+        "Reject active or retiring live-preview decoders, static output refits, unsettled background transitions and retained native replacements before and throughout an idle resource observation.",
+        "Bind presentation collection and submission maps to bounded canonical typed surface addresses and admitted native generations; reject conflicting duplicate samples and preserve explicit legacy/null-generation resource-only scope."
       ],
-      "native_acceptance": "Eligible RSS, cold/warm/resize resource targets and actual presentation pacing remain deferred under the VM and memory hold. Source audit did not demonstrate a production resource leak."
+      "native_acceptance": "Eligible RSS, cold/warm/resize resource targets and actual presentation pacing remain deferred under the VM and memory hold. Source audit did not demonstrate a production resource leak.",
+      "active_slice": "Schema 2 collector passes 29 owned Python fixtures, both independent source reviews, 27 architecture cases and the full 919-case lightweight Python suite. Mocked pre-spawn admission, every-poll/final validation and owned sampler cleanup pass. Hosted integration remains pending; no native measurement was executed.",
+      "report": "reports/measurements/lucent-resource-measurement-polish.json"
     }
   ]
 }

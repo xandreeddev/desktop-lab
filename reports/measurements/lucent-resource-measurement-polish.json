@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-18",
+  "status": "source_prepared_hosted_checks_pending",
+  "scope": "Read-only resource collector admission and presentation identity policy. Owned Python fixtures only; no measured resource improvement, native cadence or performance acceptance.",
+  "changes": [
+    "Reject active/retiring/loading live previews, every pending/awaiting-first-frame background, static output refits and retained native replacements at admission, intermediate polls and final inspection.",
+    "Admit at most 64 unique surface addresses, keyed by canonical JSON role/instance objects with legacy IDs in a separate namespace; diagnostic label collisions cannot merge typed surfaces.",
+    "Validate full inventory continuity before collecting feedback or computing submission deltas, including surfaces with no presentation history.",
+    "Use presentation records only with complete typed addresses and positive native generations; skip retained older generations and reject missing, invalid or future sample generations.",
+    "Validate duplicate feedback before retained data changes; identical repeats are idempotent and changed timestamp/clock/flags/stream associations fail.",
+    "Keep legacy and null/missing-generation surfaces resource-only, with explicit unverified identity and repeated-history observation skip counts in schema 2 reports.",
+    "Validate initial identities, histories and source associations before starting the owned sampler; terminate, kill if necessary and reap that process on interruption or failed intermediate admission."
+  ],
+  "limits": {
+    "surface_inventory": 64,
+    "presentation_snapshot_history_rows": 16384,
+    "retained_presentation_samples": 16384,
+    "retained_source_samples": 16384,
+    "scope": "Inventory/snapshot oversize rejects admission; retained sample caps report truncation. Counts of skipped history rows include repeated observations. Polling cannot rule out changes entirely between snapshots."
+  },
+  "validation": {
+    "owned_Python_cases_passed": 29,
+    "new_cases": 17,
+    "command": "python3 -m unittest discover -s tests -p test_daily_resource_measurement.py",
+    "coverage": [
+      "Existing compositor clock/source-cadence distinctions and bounded source association policy.",
+      "Typed display-label collisions, legacy namespace separation, incomplete/duplicate/oversized inventories and positive-generation admission.",
+      "Whole-inventory pre-mutation continuity, old-generation history filtering, malformed/future-generation rejection and immutable duplicate feedback.",
+      "Legacy/null/missing native identity resource-only reporting and explicit skip statistics.",
+      "Every added idle guard, including a busy second background instance.",
+      "Fully mocked main: initial rejection prevents Popen; an intermediate change aborts before a matching endpoint can hide it; final invalid state/counters write no report.",
+      "Fully mocked owned process: normal completion, failed exit, KeyboardInterrupt, terminate timeout, kill and reap."
+    ],
+    "independent_review_pending": false,
+    "hosted_integration_pending": true,
+    "native_measurements_pending": true,
+    "VM_or_SSH_operations_executed": false,
+    "embedded_sampler_executed": false,
+    "local_Rust_compilation_performed": false,
+    "local_rendering_performed": false,
+    "architecture_cases_passed": 27,
+    "diff_whitespace_check_passed": true,
+    "full_Python_suite_cases_passed": 919,
+    "full_Python_suite_log": ".cache/launcher-polish-checks/final-polish-python-checks.log",
+    "independent_reviews_passed": [
+      "Typed identity, native generation filtering, duplicate consistency, bounds and report scope.",
+      "Main admission ordering, owned-process cleanup, mocked external boundaries and report rejection."
+    ]
+  },
+  "preserved_contracts": [
+    "Existing running/installed executable, process, settings, output and producer generation/target checks remain required.",
+    "The helper never starts/restarts a VM or shell, changes preferences/wallpaper or sends native input.",
+    "Linux RSS, GPU payload estimates, successful CPU-side submissions, compositor presentation and distinct prepared revisions retain separate meanings.",
+    "Missing or unverified presentation identity never becomes a fabricated cadence or native lifetime continuity claim."
+  ],
+  "vm_started": false,
+  "native_accepted": false,
+  "performance_accepted": false,
+  "full_polish_goal_complete": false
+}
