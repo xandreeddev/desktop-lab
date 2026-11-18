@@ -69,7 +69,7 @@
       "lucent/crates/lucent-domain/src/bluetooth.rs": "80ccb9bdd35e93ab54b76dc0b5807f5a8dff96843784183336b8012a3210c8f6",
       "lucent/crates/lucent-domain/src/bluetooth_connection.rs": "8b8578bdbc2e52abd876e531091ef926f39a0a2576e4d06e5af38b2590bca137",
       "lucent/crates/lucent-domain/src/bluetooth_pairing.rs": "21816922c8664c1d0c77339e4a285841dea8819fb59c51d8a045fcea9ca22c04",
-      "lucent/crates/lucent-domain/src/desktop.rs": "070fe61faed2349554b5d7e8234670f4e45d75382d5bc6b9a9a91c8854f39668",
+      "lucent/crates/lucent-domain/src/desktop.rs": "70accf412784521cb69cf21c872f7be029a4bf32fa5231dfa4bc2e5c911c93df",
       "lucent/crates/lucent-domain/src/displays.rs": "ed54c22ea4f0bafe9800ac484827829e9bc2d1ca0160894614fe93f26b656526",
       "lucent/crates/lucent-domain/src/lib.rs": "7804884a9c51464c3199560f53bf2ac237ee92ef11d151794a5c6c7e1796626c",
       "lucent/crates/lucent-domain/src/live_wallpaper.rs": "b44a166f64bfee7bdf4072bdcc92026e1d2dfbc3ef75bed2f1363c26c2a72d57",
@@ -148,7 +148,7 @@
       "lucent/crates/lucent-usecases/src/widgets.rs": "146a59d9911213f6b9ced12f3b5eec8d8295c318faff161f0d9e4f942cc284b0"
     },
     "scope": "offscreen-native",
-    "source_commit": "a6362fd653f42ea353bd918cb390233af82b9a8b",
+    "source_commit": "f652819ed8bd2003c97c78bee30f9e12dfbd003e",
     "token_sha256": "89d6bdfcc83a58009265e3c4e75b9cb4c893bc27275b020ad3067755f60fa7d4"
   },
   "schema_version": 1,

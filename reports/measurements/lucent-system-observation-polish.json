@@ -20,7 +20,19 @@
     ],
     "formatting_passed": true,
     "diff_check_passed": true,
-    "architecture_cases_passed": 26
+    "architecture_cases_passed": 26,
+    "component_catalogue": {
+      "source_commit": "f652819ed8bd2003c97c78bee30f9e12dfbd003e",
+      "run_id": 44273633162,
+      "job_id": 134696142370,
+      "artifact_id": 14414490552,
+      "archive_sha256": "b933b792e11004f32c3ee93dd90de727fe223321153b5b6a23642d88023cd8fd",
+      "producer_inputs": 122,
+      "captures": 480,
+      "all_pngs_byte_identical_to_previous_reviewed_catalogue": true,
+      "source_manifest_refreshed": true,
+      "receipt": ".cache/launcher-polish-checks/ci-component-f652819ed8bd-14414490552/receipt.json"
+    }
   },
   "vm_started": false,
   "native_accepted": false,
