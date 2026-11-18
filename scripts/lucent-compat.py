@@ -44,7 +44,7 @@ def panel(name,toggle=False):
             for _ in range(40):
                 if menu_routes.picker_command('inspect') is None: break
                 time.sleep(.05)
-        cli('launcher','close')
+        cli('shell','hide')
         launch('controls.py',name)
         return 'ok'
     if name=='notifications': return cli('notifications','show')

@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-18",
+  "status": "implementation_ready_for_hosted_checks",
+  "scope": "Clipboard storage admission, explicit unreadable-history recovery and utility picker panel dismissal.",
+  "changes": [
+    "Clipboard history validates bounded regular-file reads, record identities and exact owned image paths.",
+    "Serialized admission and atomic replacement use the same encoded bytes; oversized individual offers preserve previous entries.",
+    "Capture validates old history before writing an image, and failed history replacement removes newly staged images while preserving committed bytes.",
+    "Unreadable history offers explicit reset or cancellation; cancellation preserves saved history and images.",
+    "Selected images are revalidated as bounded owned bytes after picker exit, before copying.",
+    "Shared pickers and accepted menu routes request desktop-owned shell dismissal before launch; failures prevent picker or action dispatch.",
+    "Installed capture commands, trusted configured actions and literal provider arguments retain their existing owners."
+  ],
+  "validation": {
+    "clipboard_store_cases_passed": 14,
+    "utility_adapter_cases_passed": 18,
+    "full_python_suite": {
+      "cases_run": 834,
+      "passed": true,
+      "log": ".cache/launcher-polish-checks/utility-python-checks.log",
+      "execution": "Rerun with permission for owned temporary Unix-socket fixtures; no live desktop or clipboard commands.",
+      "original_sandbox_attempt": {
+        "cases_run": 834,
+        "failures": 2,
+        "errors": 7,
+        "limitation": "AF_UNIX fixture binds were denied in existing artifact-retirement and multi-output cleanup tests. The failed initial attempt remains recorded separately from the passing rerun."
+      }
+    },
+    "diff_check_passed": true,
+    "hosted_checks_pending": true,
+    "native_vm_pending": true,
+    "coverage": [
+      "Exact serialized boundary, sole Unicode/escaped offers, aggregate/count eviction, deduplication, sensitivity hints and concurrent writers.",
+      "Malformed JSON/schema, lone surrogate, oversized files, invalid UTF-8, symlinks, FIFO, private permissions and image identity checks.",
+      "Read/replace/fsync failures preserve committed bytes and clean owned temporary files or newly staged images.",
+      "Recovery cancellation/reset/failure, literal text/image copying, stale image selection and copy failure before typing.",
+      "Hide-before-picker and direct capture action, dismissal failures, compatibility toggling, nonopening routes and rollback to stock."
+    ]
+  },
+  "vm_started": false,
+  "native_accepted": false,
+  "full_polish_goal_complete": false
+}

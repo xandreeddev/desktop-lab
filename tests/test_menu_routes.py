@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import tempfile
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'scripts'))
 spec = importlib.util.spec_from_file_location('routes', Path(__file__).resolve().parents[1]/'scripts/lucent-menu-routes.py')
@@ -52,7 +52,9 @@ class MenuRoutes(unittest.TestCase):
                 patch.object(routes, 'load', side_effect=self.model), patch.object(routes, 'picker_command', return_value=None), \
                 patch.object(routes, 'condition', side_effect=lambda c, d: {'hidden': False, 'yes': True}.get(c, d)), \
                 patch.object(routes, 'dispatch') as dispatch:
-            self.assertEqual(routes.run([], pick), 0)
+            before_open = Mock()
+            self.assertEqual(routes.run([], pick, before_open), 0)
+            before_open.assert_called_once_with()
             dispatch.assert_called_once_with('lock-fixture')
         self.assertEqual(seen, [('Menu', False), ('System', True), ('Menu', False), ('System', True)])
 
@@ -64,7 +66,7 @@ class MenuRoutes(unittest.TestCase):
                     patch.object(routes, 'condition', side_effect=lambda c, d: {'hidden': False, 'yes': True}.get(c, d)), \
                     patch.object(routes, 'dispatch') as dispatch:
                 with self.assertRaises(ValueError):
-                    routes.run(['summon', 'system'], lambda *a, **k: SimpleNamespace(returncode=0, stdout=value+'\n'))
+                    routes.run(['summon', 'system'], lambda *a, **k: SimpleNamespace(returncode=0, stdout=value+'\n'), Mock())
                 dispatch.assert_not_called()
 
     def test_provider_values_remain_literal_argv(self):

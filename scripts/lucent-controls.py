@@ -72,10 +72,9 @@ def power():
     output(str(Path.home()/'.local/bin/lucent-cli'), 'power', 'open')
 
 
-def paste(text=None, path=None):
-    if path:
-        with Path(path).open('rb') as stream:
-            subprocess.run(['wl-copy','--type','image/png'],stdin=stream,check=True,timeout=5)
+def paste(text=None, image=None):
+    if image is not None:
+        subprocess.run(['wl-copy','--type','image/png'],input=image,check=True,timeout=5)
     else:
         subprocess.run(['wl-copy'],input=text.encode(),check=True,timeout=5)
     time.sleep(.15)  # The picker has already destroyed its exclusive keyboard surface.
@@ -84,12 +83,28 @@ def paste(text=None, path=None):
 
 def clipboard():
     import clipboard_store
-    history = clipboard_store.read()
+    try:
+        history = clipboard_store.read()
+    except clipboard_store.HistoryError:
+        # A failed read must not make the only recovery action unreachable.
+        # Cancellation leaves the exact saved history and image files alone.
+        selected = choose('Clipboard', [
+            ('Saved history could not be read', 'Existing data is unchanged', None),
+            ('Reset saved clipboard history', 'Delete saved text and images', 'reset'),
+            ('Cancel', 'Keep saved history unchanged', 'cancel'),
+        ])
+        if selected == 'reset':
+            clipboard_store.clear()
+        return
     rows = [(item.get('text','Image').replace('\n',' ')[:120], 'Text' if item['type']=='text' else 'PNG image', item) for item in history]
     rows.append(('Clear clipboard history','Remove saved text and images','clear'))
     selected = choose('Clipboard',rows)
     if selected == 'clear': clipboard_store.clear()
-    elif isinstance(selected,dict): paste(text=selected.get('text'),path=selected.get('path'))
+    elif isinstance(selected,dict):
+        if selected['type'] == 'image':
+            paste(image=clipboard_store.image_data(selected))
+        else:
+            paste(text=selected['text'])
 
 
 def emojis():
@@ -123,7 +138,14 @@ def main(panel):
         raise ValueError('This panel has no Lucent adapter: '+panel)
     try: handlers[panel]()
     except (RuntimeError, OSError, subprocess.SubprocessError, ValueError) as error:
-        information(panel.capitalize(),str(error))
+        if isinstance(error, picker.DismissalError):
+            # Another picker cannot safely report a failed dismissal.
+            print('lucent: ' + str(error), file=sys.stderr)
+            return 1
+        try:
+            information(panel.capitalize(),str(error))
+        except picker.DismissalError as dismissal:
+            print('lucent: ' + str(dismissal), file=sys.stderr)
         return 1
     return 0
 

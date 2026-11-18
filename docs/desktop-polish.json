@@ -125,13 +125,17 @@
     },
     {
       "id": "desktop-utilities",
-      "status": "in_progress",
+      "status": "implementation_ready_for_hosted_checks",
       "behavior": "Clipboard, emoji, command/menu and capture entry points feel integrated and preserve correct return-to-application behavior.",
       "toolkit": "Shared pickers, selection, clipboard transfers and any justified native popup/capture contracts.",
       "identified_work": [
         "Use shared shell dismissal before utility pickers so exclusive panels cannot retain keyboard focus during paste or capture.",
         "Keep explicit clipboard history recovery reachable after a read failure while preserving unreadable bytes until chosen.",
         "Enforce the serialized clipboard history byte limit, including a sole Unicode or escaped entry."
+      ],
+      "report": "reports/measurements/lucent-desktop-utilities-polish.json",
+      "completed_checks": [
+        "834 Python tests pass, including32 new clipboard and utility cases; native focus/paste/capture acceptance remains deferred."
       ]
     },
     {
@@ -151,12 +155,13 @@
     },
     {
       "id": "appearance",
-      "status": "queued",
+      "status": "in_progress",
       "behavior": "Palette and wallpaper browsing, previews, applying, cancellation and failures share consistent motion, spacing and density.",
       "toolkit": "Prepared assets, streaming textures, clipping, motion and cache ownership.",
       "identified_work": [
         "Separate wallpaper search submission from pagination so editing a query cannot request page two of an unsubmitted search.",
-        "Bind live wallpaper card selection and Apply to source identity across library reorder/replacement."
+        "Bind live wallpaper card selection and Apply to source identity across library reorder/replacement.",
+        "Bind online result selection and download callbacks to the rendered result and selection lifetime; reject retired form callbacks before root admission."
       ]
     },
     {

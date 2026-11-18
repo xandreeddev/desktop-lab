@@ -102,7 +102,7 @@ def provider_rows(provider):
     return rows, actions
 
 
-def run(args, pick):
+def run(args, pick, before_open):
     verb = args[0] if args else 'toggle'
     route = args[1] if len(args) > 1 else 'root'
     if verb in ('help', '--help', '-h'):
@@ -132,12 +132,18 @@ def run(args, pick):
         lock.close()
         return 0
     with lock:
+        admitted = False
         while True:
             model = load()
             route = model.resolve(route)
             item = model.items[route]
             if not condition(item.get('when'), True) or condition(item.get('disabled'), False):
                 raise ValueError('This menu action is currently unavailable')
+            if not admitted:
+                # Direct action routes need the same cancellation as pickers.
+                # Help/ping/refresh, toggle-close and invalid routes never hide.
+                before_open()
+                admitted = True
             action, provider = item.get('action', ''), item.get('provider', '')
             if provider == 'apps' and not action:
                 action = ['lucent-cli', 'launcher', 'open']

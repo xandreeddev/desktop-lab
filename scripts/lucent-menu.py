@@ -7,6 +7,21 @@ import subprocess
 import sys
 
 
+class DismissalError(ValueError):
+    """The desktop did not admit shared panel dismissal."""
+
+
+def dismiss_shell():
+    # Desktop owns the panel set, cancellation and transaction rollback.
+    # The picker remains a separate process and is opened only after admission.
+    try:
+        subprocess.run([str(Path.home() / '.local/bin/lucent-cli'), 'shell', 'hide'],
+                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, check=True, timeout=3)
+    except (OSError, subprocess.SubprocessError):
+        raise DismissalError('Could not close desktop panels; try again') from None
+
+
 def entry(option, prompt):
     """Preserve the exact return value expected by Omarchy's action resolver."""
     fields = option.split('\t', 2)
@@ -71,8 +86,10 @@ def pick(payload, capture=False):
         payload['palette'] = value.get('palette')
     except (OSError, ValueError):
         pass
+    request = json.dumps(payload)
+    dismiss_shell()
     binary = Path.home() / '.local/bin/lucent-menu'
-    return subprocess.run([str(binary)], input=json.dumps(payload), text=True,
+    return subprocess.run([str(binary)], input=request, text=True,
                           stdout=subprocess.PIPE if capture else None, check=False)
 
 
@@ -88,7 +105,7 @@ def main():
         os.execv('/usr/bin/' + name, [name, *args])
     if mode == 'routes':
         import menu_routes
-        return menu_routes.run(args, pick)
+        return menu_routes.run(args, pick, dismiss_shell)
     payload = request(mode, args, sys.stdin)
     # The child writes only a selected value to stdout, after releasing focus.
     result = pick(payload)

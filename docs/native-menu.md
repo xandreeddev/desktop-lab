@@ -64,6 +64,45 @@ Each navigation opens a short-lived picker and releases its surface before the
 next step. Back currently returns to a fresh parent search/selection state; it
 does not preserve a navigation history or animate between menu pages.
 
+## Utility dismissal and clipboard recovery
+
+The shared picker bridge submits `lucent-cli shell hide` before opening its
+surface. Clipboard, emoji, reminder, select and input callers use that boundary.
+Menu routes also dismiss panels after validating the initial route, including
+routes which dispatch a trusted action without opening a picker. Help, ping,
+refresh, closing an existing picker and rejected initial routes do not dismiss
+desktop panels. A failed or timed-out dismissal prevents the new picker/action
+from launching. The desktop owns cancellation and display rollback; the bridge
+does not enumerate or independently close its children.
+
+Capture menus keep the installed capture commands and region-selection tools.
+The adapter changes dismissal and presentation, while configured actions retain
+their existing owner and literal argument contract. CLI acknowledgement establishes
+admission of dismissal; actual compositor focus release and return-to-application
+paste/capture remain native acceptance checks.
+
+Clipboard history keeps at most 100 entries and 2 MiB of serialized JSON. The
+same final UTF-8 bytes are checked and atomically written, including JSON escapes.
+An offer which cannot fit by itself is ignored without evicting saved entries or
+truncating its content. Otherwise the oldest entries are removed until both
+limits hold. Each captured PNG is also limited to 2 MiB; the history byte limit
+does not mean all retained images together occupy 2 MiB.
+
+Reads are bounded and validate entry shape, identities and owned image paths.
+Symlinks and nonregular files are rejected. Selected PNGs are read again after
+the picker closes, with a byte bound and matching content identity, before their
+bytes reach `wl-copy`. A missing or changed image cannot paste arbitrary file data.
+Capture validates the existing history before adding an image; a failed history
+replacement preserves committed history and removes its newly staged image.
+Writers retain the private directory, private atomic files and ordered file lock.
+
+Unreadable history offers **Reset saved clipboard history** and **Cancel**.
+Cancellation leaves saved JSON and image bytes unchanged. Reset is explicit,
+works without parsing the damaged history, and removes owned saved images after
+replacing the history. Storage errors do not include saved content. Sensitivity
+hints continue to prevent capture, and normal clipboard/emoji selection copies
+before requesting Shift+Insert only after the picker has exited.
+
 ## Installation and rollback
 
 Build the workspace and run `scripts/lucent-setup.py install` then `activate`.
@@ -85,6 +124,10 @@ See the [current ownership map](https://xandreeddev.github.io/desktop-lab/docs/s
   values, empty results, cancellation, keyboard focus, disabled rows, parent
   navigation and uncropped last rows.
 - Python tests preserve the installed Omarchy caller's argument/value contract.
+- `tests/test_clipboard_store.py` covers serialized limits, malformed reads,
+  private files, concurrent writers and failed-write preservation.
+- `tests/test_utility_pickers.py` covers explicit recovery, cancellation, image
+  revalidation and dismissal ordering through mocked OS command boundaries.
 - Native visual fixtures cover normal, narrow/scrolled, empty and input states
   in dark/light palettes at 1× and 2×.
 - `python3 vm/test-desktop-polish.py` checks native submenus reached through
