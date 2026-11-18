@@ -1,0 +1,183 @@
+name: coherent desktop-polish Arch release
+
+on:
+  push:
+    branches: [ci/lucent-polish-coherent-release]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arch-release-polish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  arch-release:
+    if: >-
+      github.repository == 'xandreeddev/desktop-lab' &&
+      github.actor == 'xandreeddev' && github.triggering_actor == 'xandreeddev'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    container:
+      # Official base-devel-20261018.0.612668, Linux/amd64 manifest.
+      image: docker.io/library/archlinux@sha256:2acfa2683d458b7803b7aa4ee3c139d2ba6922cd84666fcb7496a3a02fcc4c83
+      options: --init --cpus 3 --memory 10g --memory-swap 10g --pids-limit 1024
+    defaults:
+      run:
+        shell: bash --noprofile --norc -euo pipefail {0}
+    env:
+      LUCENT_CI_IMAGE: docker.io/library/archlinux@sha256:2acfa2683d458b7803b7aa4ee3c139d2ba6922cd84666fcb7496a3a02fcc4c83
+      LUCENT_WORKFLOW_SHA: ${{ github.workflow_sha }}
+      RUSTUP_TOOLCHAIN: 1.99.0
+      CARGO_TERM_COLOR: never
+    steps:
+      - name: Admit remote budget and freeze one signed Arch package transaction
+        timeout-minutes: 15
+        run: |
+          proof="$RUNNER_TEMP/arch-dependencies"
+          mkdir -p "$proof/cache" "$proof/databases" "$RUNNER_TEMP/arch-artifacts"
+          task_stage=admission
+          task_failure() {
+            local task_status=$?
+            trap - ERR
+            set +e
+            printf 'Arch dependency setup failed: stage=%s status=%s\n' "$task_stage" "$task_status"
+            # Use shell builtins: a failed transaction may prevent docker exec
+            # or even a new tail process from starting inside this container.
+            local task_file task_line task_count task_index
+            local -a task_lines
+            for task_file in "$proof/download.log" "$proof/install.log" /proc/1/comm /sys/fs/cgroup/memory.events /sys/fs/cgroup/memory.current /sys/fs/cgroup/pids.events /sys/fs/cgroup/pids.current; do
+              if ! test -r "$task_file"; then continue; fi
+              printf '\n%s\n' "$task_file"
+              task_lines=(); task_count=0
+              while IFS= read -r task_line || test -n "$task_line"; do
+                task_lines[task_count % 80]="${task_line:0:2000}"
+                task_count=$((task_count + 1))
+              done < "$task_file"
+              for ((task_index=task_count > 80 ? task_count - 80 : 0; task_index < task_count; task_index++)); do
+                printf '%s\n' "${task_lines[task_index % 80]}"
+              done
+            done
+            exit "$task_status"
+          }
+          trap task_failure ERR
+          test "$(cat /sys/fs/cgroup/memory.max)" = 10737418240
+          test "$(cat /sys/fs/cgroup/cpu.max)" = '300000 100000'
+          test "$(cat /sys/fs/cgroup/memory.swap.max)" = 0
+          test "$(cat /sys/fs/cgroup/pids.max)" = 1024
+          test "$(cat /proc/1/comm)" = docker-init
+          for sample in 1 2 3; do
+            host_mib=$(awk '/^MemAvailable:/ {print int($2 / 1024)}' /proc/meminfo)
+            current=$(cat /sys/fs/cgroup/memory.current)
+            remaining_mib=$(( (10737418240 - current) / 1048576 ))
+            effective=$host_mib
+            if (( remaining_mib < effective )); then effective=$remaining_mib; fi
+            test "$effective" -ge 4500
+            printf '%s\n' "$effective" >> "$proof/bootstrap-admission.txt"
+            sleep 1
+          done
+          packages=(base-devel git python rustup clang llvm pkgconf wayland libxkbcommon pam polkit libpulse ffmpeg vulkan-icd-loader vulkan-swrast vulkan-tools dbus fontconfig ttf-dejavu noto-fonts zstd)
+          # Download once, then install from the same frozen sync databases.
+          # The default required package signature policy is retained.
+          task_stage=signature-policy
+          pacman-conf SigLevel > "$proof/signature-policy.txt"
+          grep -qw PackageRequired "$proof/signature-policy.txt"
+          task_stage=download
+          pacman -Syuw --noconfirm --cachedir "$proof/cache" "${packages[@]}" > "$proof/download.log" 2>&1
+          task_stage=freeze
+          sha256sum /var/lib/pacman/sync/*.db > "$proof/databases.sha256"
+          cp /var/lib/pacman/sync/*.db "$proof/databases/"
+          pacman -Sup --print-format '%l' "${packages[@]}" > "$proof/resolved-urls.txt"
+          find "$proof/cache" -type f -name '*.pkg.tar.*' ! -name '*.sig' -print0 | sort -z | xargs -0 -r sha256sum > "$proof/archives.sha256"
+          test -s "$proof/archives.sha256"
+          task_stage=install
+          pacman -Su --needed --noconfirm --cachedir "$proof/cache" "${packages[@]}" > "$proof/install.log" 2>&1
+          task_stage=verify
+          sha256sum --check "$proof/databases.sha256"
+          sha256sum --check "$proof/archives.sha256"
+          pacman -Q > "$proof/installed-packages.txt"
+
+      - name: Checkout reviewed workflow tools
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          path: tools
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Require the explicit reviewed application source pin
+        id: source-pin
+        run: |
+          python3 tools/ci/arch_release.py --require-source-pin > "$RUNNER_TEMP/source-pin.json"
+          python3 - <<'PY_SOURCE_PIN'
+          import json, os
+          from pathlib import Path
+          pin = json.loads((Path(os.environ['RUNNER_TEMP']) / 'source-pin.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write('commit=' + pin['source_commit'] + '\n')
+          PY_SOURCE_PIN
+
+      - name: Checkout exact reviewed application source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ steps.source-pin.outputs.commit }}
+          path: source
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install exact Rust toolchain
+        timeout-minutes: 10
+        run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
+
+      - name: Run coherent release qualification and fresh software Component Lab export
+        timeout-minutes: 150
+        run: |
+          # checkout's temporary HOME exception does not survive this step.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/tools"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/source"
+          python3 tools/ci/arch_release.py --run \
+            --source-directory "$GITHUB_WORKSPACE/source" \
+            --target-directory "$RUNNER_TEMP/lucent-target-polish" \
+            --output "$RUNNER_TEMP/arch-artifacts/lucent-polish" \
+            --dependency-evidence "$RUNNER_TEMP/arch-dependencies" \
+            --envelope "$RUNNER_TEMP/arch-release-envelope"
+
+      - name: Retain coherent archive and portable receipt
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lucent-arch-polish-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/arch-release-envelope
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+          overwrite: false
+
+      - name: Collect bounded diagnostics into one container-native directory
+        if: failure()
+        run: |
+          diagnostics="$RUNNER_TEMP/arch-diagnostics"
+          mkdir -m 700 "$diagnostics"
+          for task_file in \
+            "$RUNNER_TEMP/arch-artifacts/lucent-polish/build.json" \
+            "$RUNNER_TEMP/arch-artifacts/lucent-polish/logs/"*.log \
+            "$RUNNER_TEMP/arch-artifacts/lucent-polish/dependency-fetch.log" \
+            "$RUNNER_TEMP/arch-dependencies/download.log" \
+            "$RUNNER_TEMP/arch-dependencies/install.log"; do
+            if test -f "$task_file" && ! test -L "$task_file"; then
+              task_bytes=$(stat --format=%s -- "$task_file")
+              if test "$task_bytes" -le 16777216; then
+                cp -- "$task_file" "$diagnostics/${task_file##*/}"
+              fi
+            fi
+          done
+
+      - name: Retain bounded build diagnostics when qualification fails
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lucent-arch-polish-failed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/arch-diagnostics
+          if-no-files-found: warn
+          retention-days: 14
+          overwrite: false

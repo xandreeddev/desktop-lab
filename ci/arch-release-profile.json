@@ -1,0 +1,157 @@
+{
+  "container_image": "docker.io/library/archlinux@sha256:2acfa2683d458b7803b7aa4ee3c139d2ba6922cd84666fcb7496a3a02fcc4c83",
+  "container_dated_tag": "base-devel-20261018.0.612668",
+  "rust_release": "1.99.0",
+  "rust_commit": "b940084d7eb6a299eb4bfeb8e34901bc051e7ac4",
+  "repository": "xandreeddev/desktop-lab",
+  "actor": "xandreeddev",
+  "cpu_limit": 3,
+  "memory_max_bytes": 10737418240,
+  "admission_floor_mib": 4500,
+  "managed_executables": [
+    "lucent-desktop",
+    "lucent-cli",
+    "lucent-menu",
+    "lucent-lock",
+    "lucent-greeter",
+    "lucent-polkit"
+  ],
+  "acceptance_executables": [
+    "international-text",
+    "input-method-peer",
+    "application-intent"
+  ],
+  "support_files": [
+    "configs/lucent/greetd/config.toml",
+    "configs/lucent/greetd/greeter.lua",
+    "configs/lucent/greetd/run-greeter",
+    "configs/lucent/layer-rules.lua",
+    "configs/lucent/palettes.json",
+    "configs/lucent/themes/dark/colors.toml",
+    "configs/lucent/themes/dark/gtk.css",
+    "configs/lucent/themes/dark/hyprlock.conf",
+    "configs/lucent/themes/light/colors.toml",
+    "configs/lucent/themes/light/gtk.css",
+    "configs/lucent/themes/light/hyprlock.conf",
+    "configs/lucent/window-rules.lua",
+    "scripts/clipboard_store.py",
+    "scripts/lucent-catalog.py",
+    "scripts/lucent-clipboard.py",
+    "scripts/lucent-compat.py",
+    "scripts/lucent-controls.py",
+    "scripts/lucent-idle.py",
+    "scripts/lucent-lock.py",
+    "scripts/lucent-login.py",
+    "scripts/lucent-menu-routes.py",
+    "scripts/lucent-menu.py",
+    "scripts/lucent-session.py",
+    "scripts/lucent-setup.py",
+    "scripts/lucent-stop-stock.py",
+    "scripts/lucent-theme.py",
+    "scripts/lucent-wallpaper.py",
+    "scripts/lucent_readiness.py",
+    "scripts/menu_model.py"
+  ],
+  "example_sources": [
+    "lucent/examples/international-text/Cargo.toml",
+    "lucent/examples/international-text/src/bin/input-method-peer.rs",
+    "lucent/examples/international-text/src/main.rs",
+    "lucent/examples/application-intent/Cargo.toml",
+    "lucent/examples/application-intent/src/main.rs"
+  ],
+  "schema_version": 1,
+  "source_commit": null,
+  "source_tree": null,
+  "branch": "ci/lucent-polish-coherent-release",
+  "pids_limit": 1024,
+  "private_target_name": "lucent-target-polish",
+  "build_jobs": 1,
+  "scope": "Coherent hosted Arch release of an explicitly pinned reviewed desktop-polish source, with six managed clients and their exact support files. Fresh software Vulkan Component Lab evidence is separate from runtime ABI, native behavior, visual approval and performance acceptance.",
+  "license_files": [
+    "LICENSE",
+    "lucent/apps/lucent-desktop/assets/LICENSE-Lucid.txt",
+    "lucent/apps/lucent-desktop/assets/OFL-GoogleSansFlex.txt",
+    "lucent/crates/lucent-services/assets/material/LICENSE",
+    "lucent/crates/lucent-ui/assets/NotoSans-OFL.txt",
+    "lucent/crates/lucent-ui/assets/NotoSansArabic-OFL.txt",
+    "lucent/crates/lucent-ui/assets/NotoSansBengali-OFL.txt",
+    "lucent/crates/lucent-ui/assets/NotoSansCJK-OFL.txt",
+    "lucent/crates/lucent-ui/assets/NotoSansDevanagari-OFL.txt",
+    "lucent/crates/lucent-ui/assets/NotoSansHangul-OFL.txt",
+    "lucent/crates/lucent-ui/assets/NotoSansHebrew-OFL.txt",
+    "lucent/crates/lucent-ui/assets/NotoSansTamil-OFL.txt",
+    "lucent/crates/lucent-ui/assets/NotoSansThai-OFL.txt",
+    "lucent/crates/lucent-wayland/protocols/hyprland-focus-grab-v1.xml"
+  ],
+  "build_packages": [
+    "lucent-desktop",
+    "lucent-cli",
+    "lucent-menu",
+    "lucent-session",
+    "lucent-polkit",
+    "international-text",
+    "application-intent",
+    "lucent-lab"
+  ],
+  "test_gates": [
+    {
+      "name": "workspace-tests",
+      "arguments": [
+        "--workspace",
+        "--all-targets"
+      ],
+      "harness_arguments": [],
+      "full": true
+    },
+    {
+      "name": "workspace-doctests",
+      "arguments": [
+        "--workspace",
+        "--doc"
+      ],
+      "harness_arguments": [],
+      "full": true,
+      "allow_empty": true
+    },
+    {
+      "name": "upload-vulkan-tests",
+      "arguments": [
+        "-p",
+        "lucent-render",
+        "--lib",
+        "stream_upload::tests::"
+      ],
+      "harness_arguments": [
+        "--ignored",
+        "--skip",
+        "stream_upload_cpu_stage_diagnostic_1080p"
+      ],
+      "full": false
+    },
+    {
+      "name": "desktop-bar-pixels-tests",
+      "arguments": [
+        "-p",
+        "lucent-desktop",
+        "--bin",
+        "lucent-desktop",
+        "bar_handoff_carriers_keep_identical_pixels"
+      ],
+      "harness_arguments": [
+        "--ignored"
+      ],
+      "full": false,
+      "required_test_names": [
+        "bar_handoff_carriers_keep_identical_pixels"
+      ]
+    }
+  ],
+  "component_lab": {
+    "reference_manifest": "site/public/component-lab/manifest.json",
+    "export_timeout_seconds": 720,
+    "checker_timeout_seconds": 60,
+    "checker_source": "scripts/check-component-lab.py",
+    "renderer_scope": "offscreen-native",
+    "collection_scope": "github-hosted-Arch CPU software Vulkan, no Wayland compositor or VM"
+  }
+}
