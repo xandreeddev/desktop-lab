@@ -181,7 +181,12 @@ impl Center {
                         .id(format!("notification-next-action-{}", note.id)),
                 );
             }
-            children.push(Element::row(buttons).width(Length::Fill).gap(space::XS));
+            children.push(
+                Element::column(buttons)
+                    .width(Length::Fill)
+                    .gap(space::XS)
+                    .align(Align::End),
+            );
         }
         Element::column(children)
             .gap(token::GAP)

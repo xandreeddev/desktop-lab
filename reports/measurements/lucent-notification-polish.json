@@ -8,7 +8,8 @@
     "Finite nonnegative maximum outer height is an opt-in public toolkit constraint; existing uncapped trees retain their behavior.",
     "Capped natural scroll measurement accounts for the same gutter width used by placement and scroll range.",
     "App labels and action labels use generated line-limit tokens.",
-    "Shrinking a selected notification group clamps the canonical page before the next navigation."
+    "Shrinking a selected notification group clamps the canonical page before the next navigation.",
+    "Multiple-action cards give the primary action a full-width row and place the action pager beneath it, preventing squeezed labels in narrow history cards."
   ],
   "validation": {
     "formatting_passed": true,
@@ -60,7 +61,9 @@
       "all_case_pngs_crc_verified": true,
       "all_differences_confined_to_notifications": true,
       "baseline_promotion_approved": false,
-      "visual_issue": "Plain toast viewport exposed a contrasting gutter and clipped the card shadow. Move surface/shadow ownership to the plain viewport and review fresh output before accepting baselines."
+      "visual_issue": "Plain toast viewport exposed a contrasting gutter and clipped the card shadow. Move surface/shadow ownership to the plain viewport and review fresh output before accepting baselines.",
+      "additional_visual_issue": "Nested narrow history cards squeezed the primary action label beside Next action. Stack the full-width primary action above its compact pager; verify both controls after End on short outputs.",
+      "reviewed_new_fixture_cases": 16
     }
   },
   "vm_started": false,

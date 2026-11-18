@@ -1142,6 +1142,10 @@ fn plain_toasts_keep_actions_reachable_with_short_outputs_and_multiline_metadata
         let mut live = note(1, 7, "Fixture");
         live.summary = "A long notification title that wraps within a narrow screen".repeat(2);
         live.body = "Long content remains readable and actions remain reachable. ".repeat(12);
+        live.actions.push(NotificationAction {
+            id: "later".into(),
+            label: "Remind me later".into(),
+        });
         if multiline_metadata {
             live.app = "A\n".repeat(63);
             live.actions[0].label = "Go\n".repeat(20);
@@ -1189,6 +1193,19 @@ fn plain_toasts_keep_actions_reachable_with_short_outputs_and_multiline_metadata
             y >= 0. && y < height && action.contains(x, y),
             "action clipped at height {height}"
         );
+        let pager = scene
+            .hits
+            .iter()
+            .find(|hit| hit.id == "notification-next-action-1")
+            .unwrap();
+        for control in [action, pager] {
+            assert!(
+                control.rect.y >= control.clip.bounds.y
+                    && control.rect.y + control.rect.h
+                        <= control.clip.bounds.y + control.clip.bounds.h,
+                "notification action or pager is clipped at height {height}",
+            );
+        }
         assert!(
             matches!(action.click.as_ref(), Some(Message::Invoke(actual, _)) if *actual == target)
         );
