@@ -60,8 +60,8 @@
     "lucent/examples/application-intent/src/main.rs"
   ],
   "schema_version": 1,
-  "source_commit": null,
-  "source_tree": null,
+  "source_commit": "4eb2e74360b8c7615e6d8e328759416c055cce6a",
+  "source_tree": "0c877b3155c399bc9e8a6e21f039e3a8d376c983",
   "branch": "ci/lucent-polish-coherent-release",
   "pids_limit": 1024,
   "private_target_name": "lucent-target-polish",
