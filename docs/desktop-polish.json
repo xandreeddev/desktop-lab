@@ -95,7 +95,7 @@
     },
     {
       "id": "notifications",
-      "status": "in_progress",
+      "status": "hosted_validation_in_progress",
       "behavior": "Toasts and history have readable content, reachable actions, reliable DND and grouping, safe links and consistent keyboard navigation.",
       "toolkit": "Optional maximum outer height and intrinsically sized bounded scroll viewports; desktop-owned toast/history state and limits.",
       "report": "reports/measurements/lucent-notification-polish.json",
@@ -108,28 +108,61 @@
       ]
     },
     {
+      "id": "bar-dock-tray",
+      "status": "in_progress",
+      "behavior": "Tray menus invoke only the displayed application and menu lifetime; dock gestures preserve newer pin preferences.",
+      "toolkit": "Existing mapped input callbacks, clipped hit testing and controlled scrolling; menu identities and pin authority stay in clients.",
+      "report": "reports/measurements/lucent-bar-dock-tray-polish.json",
+      "acceptance": [
+        "Captured tray callbacks cannot cross owner, menu revision, parent or reopened presentation boundaries.",
+        "Pending menu loads retire on observation or navigation changes; closed controls preserve independent bar operations.",
+        "A pin change during a drag cancels the gesture, preserves the newly saved order and requires a fresh physical press.",
+        "Pass hosted source/protocol/visual validation, retaining VM acceptance as deferred."
+      ]
+    },
+    {
       "id": "desktop-utilities",
       "status": "queued",
       "behavior": "Clipboard, emoji, command/menu and capture entry points feel integrated and preserve correct return-to-application behavior.",
-      "toolkit": "Shared pickers, selection, clipboard transfers and any justified native popup/capture contracts."
+      "toolkit": "Shared pickers, selection, clipboard transfers and any justified native popup/capture contracts.",
+      "identified_work": [
+        "Use shared shell dismissal before utility pickers so exclusive panels cannot retain keyboard focus during paste or capture.",
+        "Keep explicit clipboard history recovery reachable after a read failure while preserving unreadable bytes until chosen.",
+        "Enforce the serialized clipboard history byte limit, including a sole Unicode or escaped entry."
+      ]
     },
     {
       "id": "dashboard-and-media",
       "status": "queued",
       "behavior": "Widgets, notes, calendar and media controls have complete editing, resizing, persistence, empty and error behavior.",
-      "toolkit": "Controlled editors, sliders, pointer capture and reusable layout/input boundaries."
+      "toolkit": "Controlled editors, sliders, pointer capture and reusable layout/input boundaries.",
+      "identified_work": [
+        "Reject hidden Notes edit callbacks while preserving cancelled clipboard and per-output ownership.",
+        "Retire seek previews and disable seek authority while a media command is pending.",
+        "Represent system sampling loading, failure and recovery truthfully, retaining last-good data without presenting it as current.",
+        "Make resized media content responsive and bound long title/artist metadata."
+      ]
     },
     {
       "id": "appearance",
       "status": "queued",
       "behavior": "Palette and wallpaper browsing, previews, applying, cancellation and failures share consistent motion, spacing and density.",
-      "toolkit": "Prepared assets, streaming textures, clipping, motion and cache ownership."
+      "toolkit": "Prepared assets, streaming textures, clipping, motion and cache ownership.",
+      "identified_work": [
+        "Separate wallpaper search submission from pagination so editing a query cannot request page two of an unsubmitted search.",
+        "Bind live wallpaper card selection and Apply to source identity across library reorder/replacement."
+      ]
     },
     {
       "id": "outputs-and-session",
       "status": "queued",
       "behavior": "Display changes, per-output layouts, scaling and secure session transitions preserve usable controls and user state.",
-      "toolkit": "Output/native lifetime contracts, density, input routing and secure role boundaries."
+      "toolkit": "Output/native lifetime contracts, density, input routing and secure role boundaries.",
+      "identified_work": [
+        "Bind Keep/Revert callbacks to the rendered display transaction and current confirmation phase.",
+        "Preserve pending display apply cancellation across close then reopen before admission returns.",
+        "Verify authentication control reachability on short outputs and long prompts before presentation-only changes; preserve all secure authority."
+      ]
     },
     {
       "id": "resources-and-motion",

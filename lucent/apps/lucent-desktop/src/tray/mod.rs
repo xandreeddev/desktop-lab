@@ -18,12 +18,27 @@ pub enum Message {
     Act(TrayItemId, TrayAction),
     Bar(TrayItemId, BarAction),
     Menu(TrayItemId, i32),
-    Invoke(i32),
-    Back,
+    Invoke(MenuAuthority, i32),
+    Back(MenuAuthority),
     Completed(u64, Result<()>),
     Loaded(u64, Result<TrayMenu>),
     Icons(u64, Images),
     Ignore,
+}
+/// A callback belongs to the displayed menu, not just its reusable row number.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MenuAuthority {
+    item: TrayItemId,
+    revision: u32,
+    presentation: u64,
+    parent: i32,
+}
+struct PendingMenu {
+    request: u64,
+    item: TrayItemId,
+    presentation: u64,
+    parent: i32,
+    observation_generation: u64,
 }
 pub struct Tray {
     adapter: Arc<dyn TrayPort>,
@@ -39,6 +54,8 @@ pub struct Tray {
     active: Option<u64>,
     target: Option<TrayItemId>,
     menu: Option<TrayMenu>,
+    menu_presentation: u64,
+    pending_menu: Option<PendingMenu>,
     parents: Vec<i32>,
     scroll: f32,
     error: String,
@@ -65,6 +82,8 @@ impl Tray {
             active: None,
             target: None,
             menu: None,
+            menu_presentation: 0,
+            pending_menu: None,
             parents: vec![],
             scroll: 0.,
             error: String::new(),
@@ -78,6 +97,7 @@ impl Tray {
     }
     #[cfg(test)]
     pub(super) fn load_fixture_menu(&mut self, menu: TrayMenu) {
+        self.reset_menu();
         self.target = Some(menu.item);
         self.menu = Some(menu);
         self.parents = vec![0];
@@ -96,10 +116,23 @@ impl Tray {
         self.menu = None;
         self.parents.clear();
         self.scroll = 0.;
+        self.retire_menu_callbacks();
+    }
+    fn retire_menu_callbacks(&mut self) {
+        self.menu_presentation = self.menu_presentation.wrapping_add(1);
+        self.pending_menu = None;
         self.revision = self.revision.wrapping_add(1);
         self.active = None;
         self.wheel = None;
         self.wheel_active = None;
+    }
+    fn menu_authority(&self, menu: &TrayMenu) -> MenuAuthority {
+        MenuAuthority {
+            item: menu.item,
+            revision: menu.revision,
+            presentation: self.menu_presentation,
+            parent: self.parents.last().copied().unwrap_or(0),
+        }
     }
     fn set_open(&mut self, open: bool, now: f64) {
         if self.open == open {
@@ -151,19 +184,14 @@ impl Tray {
                 }) {
                     self.wheel = None;
                 }
-                if self
-                    .target
-                    .is_some_and(|id| !snapshot.items.iter().any(|i| i.id == id))
-                {
-                    self.reset_menu();
-                }
-                if let Some(menu) = &self.menu {
-                    let previous = self.snapshot.items.iter().find(|i| i.id == menu.item);
-                    let current = snapshot.items.iter().find(|i| i.id == menu.item);
-                    if previous
-                        .zip(current)
-                        .is_none_or(|(a, b)| a.menu_generation != b.menu_generation)
-                    {
+                if let Some(id) = self.target {
+                    let previous = self.snapshot.items.iter().find(|i| i.id == id);
+                    let current = snapshot.items.iter().find(|i| i.id == id);
+                    if previous.zip(current).is_none_or(|(a, b)| {
+                        b.status == TrayStatus::Passive
+                            || (self.menu.is_some() || self.pending_menu.is_some())
+                                && (!b.has_menu || a.menu_generation != b.menu_generation)
+                    }) {
                         self.reset_menu();
                     }
                 }
@@ -208,11 +236,25 @@ impl Tray {
                     self.mounted = false;
                 }
             }
-            Message::Scroll(event) => self.scroll = event.offset,
-            Message::Back => {
+            Message::Scroll(event) => {
+                if !self.open || !event.offset.is_finite() {
+                    return;
+                }
+                self.scroll = event.offset.max(0.);
+            }
+            Message::Back(authority) => {
+                if !self.open
+                    || self
+                        .menu
+                        .as_ref()
+                        .is_none_or(|menu| self.menu_authority(menu) != authority)
+                {
+                    return;
+                }
                 if self.parents.len() > 1 {
                     self.parents.pop();
                     self.scroll = 0.;
+                    self.retire_menu_callbacks();
                 } else {
                     self.reset_menu();
                 }
@@ -220,7 +262,11 @@ impl Tray {
             Message::Act(id, action) => {
                 if !self.open
                     || self.active.is_some()
-                    || !self.snapshot.items.iter().any(|i| i.id == id)
+                    || !self
+                        .snapshot
+                        .items
+                        .iter()
+                        .any(|i| i.id == id && i.status != TrayStatus::Passive)
                 {
                     return;
                 }
@@ -228,14 +274,28 @@ impl Tray {
             }
             Message::Bar(id, action) => self.bar_action(id, action, effects),
             Message::Menu(id, parent) => {
-                if !self.open
-                    || self.active.is_some()
-                    || !self.snapshot.items.iter().any(|i| i.id == id && i.has_menu)
-                {
+                if !self.open || self.active.is_some() {
                     return;
                 }
+                let Some(item) = self
+                    .snapshot
+                    .items
+                    .iter()
+                    .find(|i| i.id == id && i.has_menu && i.status != TrayStatus::Passive)
+                else {
+                    return;
+                };
+                let observation_generation = item.menu_generation;
+                self.retire_menu_callbacks();
                 let revision = self.next();
                 self.target = Some(id);
+                self.pending_menu = Some(PendingMenu {
+                    request: revision,
+                    item: id,
+                    presentation: self.menu_presentation,
+                    parent,
+                    observation_generation,
+                });
                 let adapter = self.adapter.clone();
                 effects.task_on_with_failure(
                     crate::work::TRAY,
@@ -249,14 +309,20 @@ impl Tray {
                 }
                 self.scroll = 0.;
             }
-            Message::Invoke(id) => {
+            Message::Invoke(authority, id) => {
                 if !self.open || self.active.is_some() {
                     return;
                 }
                 let Some(menu) = self.menu.as_ref() else {
                     return;
                 };
-                let Some(entry) = lucent_usecases::tray::menu_entry(&menu.root, id) else {
+                if self.menu_authority(menu) != authority {
+                    return;
+                }
+                let Some(entry) = lucent_usecases::tray::menu_entry(&menu.root, authority.parent)
+                    .filter(|parent| parent.enabled && parent.visible)
+                    .and_then(|parent| parent.children.iter().find(|entry| entry.id == id))
+                else {
                     return;
                 };
                 if id == menu.root.id || !entry.enabled || !entry.visible || entry.separator {
@@ -267,13 +333,13 @@ impl Tray {
                     return;
                 }
                 if let Err(error) =
-                    lucent_usecases::tray::validate_menu_action(menu, menu.revision, id)
+                    lucent_usecases::tray::validate_menu_action(menu, authority.revision, id)
                 {
                     self.error = error.to_string();
                     return;
                 }
-                let item = menu.item;
-                let menu_revision = menu.revision;
+                let item = authority.item;
+                let menu_revision = authority.revision;
                 let revision = self.next();
                 let adapter = self.adapter.clone();
                 effects.task_on_with_failure(
@@ -300,10 +366,29 @@ impl Tray {
                 }
             }
             Message::Loaded(revision, result) if self.active == Some(revision) => {
+                let Some(pending) = self.pending_menu.take() else {
+                    return;
+                };
+                if pending.request != revision
+                    || !self.open
+                    || self.menu_presentation != pending.presentation
+                    || self.target != Some(pending.item)
+                    || self.parents.last().copied() != Some(pending.parent)
+                    || !self.snapshot.items.iter().any(|item| {
+                        item.id == pending.item
+                            && item.status != TrayStatus::Passive
+                            && item.has_menu
+                            && item.menu_generation == pending.observation_generation
+                    })
+                {
+                    self.reset_menu();
+                    return;
+                }
                 self.active = None;
+                self.menu_presentation = self.menu_presentation.wrapping_add(1);
                 match result {
-                    Ok(menu) if self.target == Some(menu.item) => self.menu = Some(menu),
-                    Ok(_) => (),
+                    Ok(menu) if pending.item == menu.item => self.menu = Some(menu),
+                    Ok(_) => self.reset_menu(),
                     Err(error) => {
                         self.error = error.to_string();
                         self.menu = None;
@@ -327,8 +412,8 @@ impl Tray {
         effects.redraw("bar");
     }
     pub fn escape(&self) -> Message {
-        if self.menu.is_some() {
-            Message::Back
+        if let Some(menu) = &self.menu {
+            Message::Back(self.menu_authority(menu))
         } else {
             Message::Close
         }

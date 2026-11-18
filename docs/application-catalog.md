@@ -79,9 +79,11 @@ unpinning and order changes use pure use cases; the existing persistence
 coordinator remains the sole producer of ordered settings saves.
 
 Drag previews belong to the dock coordinator and never mutate preferences.
-Release commits a validated order. Catalog/compositor/viewport changes cancel
-an active gesture; a new physical press distinguishes a new gesture from a
-stale release. Input-only sources preserve capture while painted previews move.
+Release commits a validated order. Catalog/compositor/viewport changes and
+changes to the effective saved pin order cancel an active gesture. Unpinning an
+app during a drag cannot be undone by the old release. A new physical press
+distinguishes a new gesture from a stale release. Input-only sources preserve
+capture while painted previews move.
 Dragging a running app can make it a pin; saved pins precede other running apps.
 
 Commands are literal IPC values, not shell snippets:

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-18",
+  "status": "implementation_ready_for_hosted_checks",
+  "scope": "Tray menu callback and load lifetimes, plus dock pin-change capture retirement.",
+  "changes": [
+    "Rendered tray menu actions capture exact application, native revision, local presentation lifetime and parent.",
+    "Initial and nested menu loads retain observed generation and discard retired replies.",
+    "Closed Back/scroll callbacks do not retire independent bar actions; scroll input remains finite and nonnegative.",
+    "Dock gestures retire when effective saved pins change, including external settings replacement, so old releases cannot restore removed pins."
+  ],
+  "validation": {
+    "rust_execution_pending": true,
+    "hosted_visuals_pending": true,
+    "native_vm_pending": true,
+    "coverage": [
+      "Actual pointer/keyboard tray callbacks across owners, revisions, reopening and submenu navigation.",
+      "Pending menu load generation/capability/passive retirement and stale completion rejection.",
+      "Closed callbacks during direct bar work and invalid scroll values.",
+      "Unpin, toggle-pin, reorder and external preference replacement during a dock drag; fresh pointer recovery and unrelated preference preservation."
+    ],
+    "architecture_cases_passed": 26,
+    "formatting_passed": true,
+    "diff_check_passed": true
+  },
+  "vm_started": false,
+  "native_accepted": false,
+  "full_polish_goal_complete": false
+}

@@ -129,6 +129,17 @@ impl Dock {
             self.hide_generation = self.hide_generation.wrapping_add(1);
         }
     }
+    fn retire_changed_pins(&mut self, settings: &DesktopSettings, apps: &[Application], now: f64) {
+        if self
+            .drag
+            .as_ref()
+            .is_some_and(|drag| drag.pins != Self::pins(settings, apps))
+        {
+            self.cancelled = true;
+            self.drag = None;
+            self.reconcile(settings.dock.auto_hide, now);
+        }
+    }
     pub fn update(
         &mut self,
         message: Message,
@@ -137,6 +148,9 @@ impl Dock {
         visible: &[AppId],
         effects: &mut Effects<Message>,
     ) -> Option<Intent> {
+        // A captured order must never overwrite newer preferences, including
+        // a settings snapshot applied outside this child.
+        self.retire_changed_pins(settings, apps, effects.now);
         let result = match message {
             Message::Press => {
                 self.cancelled = false;
@@ -247,6 +261,7 @@ impl Dock {
                 }
             }
         };
+        self.retire_changed_pins(settings, apps, effects.now);
         effects.redraw("dock");
         match result {
             Ok(true) => Some(Intent::Save),

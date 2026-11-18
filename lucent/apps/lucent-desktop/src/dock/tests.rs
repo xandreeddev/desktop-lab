@@ -118,6 +118,102 @@ fn drag_preview_is_transient_release_commits_order_and_cancel_rejects_old_releas
     );
 }
 #[test]
+fn pin_changes_retire_drag_without_restoring_removed_pins_or_old_order() {
+    let apps = apps();
+    let ids = apps.iter().map(|app| app.id.clone()).collect::<Vec<_>>();
+    let step = component::dock_row::ITEM_SIZE + lucent_design::space::SM;
+    for change in [
+        Message::SetPin(ids[2].clone(), false),
+        Message::Pin(ids[2].clone()),
+        Message::Move(ids[2].clone(), Some(ids[0].clone())),
+    ] {
+        let mut settings = DesktopSettings {
+            pinned: ids.clone(),
+            ..Default::default()
+        };
+        let mut dock = Dock::default();
+        let mut effects = Effects::default();
+        let movement = |finished| {
+            Message::Drag(
+                ids[0].clone(),
+                DragEvent {
+                    dx: step,
+                    dy: 0.,
+                    finished,
+                },
+            )
+        };
+        dock.update(movement(false), &mut settings, &apps, &ids, &mut effects);
+        assert!(dock.dragging());
+        assert!(matches!(
+            dock.update(change, &mut settings, &apps, &ids, &mut effects),
+            Some(Intent::Save)
+        ));
+        let committed = settings.clone();
+        assert!(!dock.dragging());
+        assert!(
+            dock.update(movement(true), &mut settings, &apps, &ids, &mut effects)
+                .is_none()
+        );
+        assert_eq!(settings, committed);
+
+        let visible = Dock::pins(&settings, &apps);
+        dock.update(Message::Press, &mut settings, &apps, &visible, &mut effects);
+        dock.update(
+            movement(false),
+            &mut settings,
+            &apps,
+            &visible,
+            &mut effects,
+        );
+        assert!(
+            dock.dragging(),
+            "a fresh pointer press can start a new gesture"
+        );
+    }
+}
+
+#[test]
+fn drag_detects_external_pin_changes_but_preserves_unrelated_preferences() {
+    let apps = apps();
+    let ids = apps.iter().map(|app| app.id.clone()).collect::<Vec<_>>();
+    let mut settings = DesktopSettings {
+        pinned: ids.clone(),
+        ..Default::default()
+    };
+    let mut dock = Dock::default();
+    let mut effects = Effects::default();
+    let movement = |finished| {
+        Message::Drag(
+            ids[0].clone(),
+            DragEvent {
+                dx: 60.,
+                dy: 0.,
+                finished,
+            },
+        )
+    };
+    dock.update(movement(false), &mut settings, &apps, &ids, &mut effects);
+    dock.update(
+        Message::AutoHide(true),
+        &mut settings,
+        &apps,
+        &ids,
+        &mut effects,
+    );
+    assert!(dock.dragging());
+    settings.pinned.remove(2);
+    let committed = settings.clone();
+    assert!(
+        dock.update(movement(true), &mut settings, &apps, &ids, &mut effects)
+            .is_none()
+    );
+    assert_eq!(settings, committed);
+    assert!(!dock.dragging());
+    assert!(dock.hide_pending);
+}
+
+#[test]
 fn pinning_is_idempotent_and_preferences_roundtrip() {
     let apps = apps();
     let ids = apps.iter().map(|a| a.id.clone()).collect::<Vec<_>>();

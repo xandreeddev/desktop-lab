@@ -55,7 +55,14 @@ impl Tray {
             return vec![text(&self.status, theme)];
         }
         if let Some(menu) = &self.menu {
-            rows.push(button("Back", "tray-back", Message::Back, true, theme));
+            let authority = self.menu_authority(menu);
+            rows.push(button(
+                "Back",
+                "tray-back",
+                Message::Back(authority),
+                true,
+                theme,
+            ));
             let parent = self.parents.last().copied().unwrap_or(0);
             let entries =
                 lucent_usecases::tray::menu_entry(&menu.root, parent).map(|e| &e.children);
@@ -106,7 +113,7 @@ impl Tray {
                         .radius(lucent_design::component::button::RADIUS)
                         .background(theme.surface_container)
                         .on_click(if enabled {
-                            Message::Invoke(entry.id)
+                            Message::Invoke(authority, entry.id)
                         } else {
                             Message::Ignore
                         })

@@ -107,6 +107,14 @@ invisible or old rows cannot be invoked through a cached client menu. Closing or
 retiring the target discards late client replies. Closing does not undo an action
 already accepted by the application. No shell command is built from menu data.
 
+Rendered menu callbacks also capture the item, native revision, displayed parent
+and local presentation lifetime. Reusing a row number in another application's
+menu, revisiting a submenu or reopening the same menu cannot redirect an old
+callback. Initial and nested menu loads retain the observed menu generation;
+capability, owner, generation and navigation changes retire their replies before
+they can replace the current view. Closed Back/scroll callbacks leave independent
+bar actions alone, and invalid scroll values never reach layout.
+
 ## Boundaries and limits
 
 The watcher retains at most 64 items and 16 hosts. Registration wakes coalesce;

@@ -7,9 +7,10 @@ use std::sync::Mutex;
 enum HeaderCall {
     Activate(TrayItemId, TrayAction),
     Menu(TrayItemId, i32),
+    Invoke(TrayItemId, u32, i32),
 }
 #[derive(Default)]
-struct HeaderAdapter(Mutex<Vec<HeaderCall>>);
+struct HeaderAdapter(Mutex<Vec<HeaderCall>>, Mutex<Option<TrayMenu>>);
 impl TrayPort for HeaderAdapter {
     fn watch(&self, _: &mut dyn FnMut(Result<TraySnapshot>), _: &dyn StopSignal) {}
     fn act(&self, item: TrayItemId, action: TrayAction) -> Result<()> {
@@ -21,12 +22,16 @@ impl TrayPort for HeaderAdapter {
     }
     fn menu(&self, item: TrayItemId, parent: i32) -> Result<TrayMenu> {
         self.0.lock().unwrap().push(HeaderCall::Menu(item, parent));
-        let mut menu = menu_fixture();
+        let mut menu = self.1.lock().unwrap().clone().unwrap_or_else(menu_fixture);
         menu.item = item;
         Ok(menu)
     }
-    fn invoke(&self, _: TrayItemId, _: u32, _: i32, _: u32) -> Result<()> {
-        panic!("Opening a tray item must not invoke a menu entry")
+    fn invoke(&self, item: TrayItemId, revision: u32, entry: i32, _: u32) -> Result<()> {
+        self.0
+            .lock()
+            .unwrap()
+            .push(HeaderCall::Invoke(item, revision, entry));
+        Ok(())
     }
 }
 fn header_client(item_is_menu: bool) -> (Tray, Arc<HeaderAdapter>) {
@@ -63,9 +68,11 @@ fn header_scene(tray: &Tray, input: &Interaction<Message>) -> Scene<Message> {
     )
 }
 fn header_message(tray: &mut Tray, keyboard: bool) -> Message {
+    control_message(tray, "tray-item-open-1", keyboard)
+}
+fn control_message(tray: &mut Tray, id: &str, keyboard: bool) -> Message {
     let mut input = Interaction::default();
     let scene = header_scene(tray, &input);
-    let id = "tray-item-open-1";
     if keyboard {
         // Reach the actual control through SDK traversal, rather than assigning
         // a fabricated focus or calling the child action directly.
@@ -562,14 +569,13 @@ fn closed_retired_and_disabled_controls_do_not_schedule_app_actions() {
         &mut effects,
     );
     assert!(effects.tasks.is_empty());
-    tray.menu = Some(menu_fixture());
-    tray.target = Some(id);
-    tray.parents = vec![0];
+    tray.load_fixture_menu(menu_fixture());
+    let authority = tray.menu_authority(tray.menu.as_ref().unwrap());
     for entry in [0, 2, 3, 4, 99] {
-        tray.update(Message::Invoke(entry), &mut effects);
+        tray.update(Message::Invoke(authority, entry), &mut effects);
         assert!(effects.tasks.is_empty());
     }
-    tray.update(Message::Invoke(1), &mut effects);
+    tray.update(Message::Invoke(authority, 1), &mut effects);
     assert_eq!(effects.tasks.len(), 1);
     assert_eq!(effects.tasks[0].queue, crate::work::TRAY);
 }
@@ -603,3 +609,5 @@ fn observed_menu_change_discards_the_client_menu() {
     assert!(tray.menu.is_none());
     assert!(tray.target.is_none());
 }
+
+mod menu_lifetimes;
