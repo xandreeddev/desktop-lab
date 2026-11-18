@@ -131,16 +131,25 @@ class ArchReceiver(unittest.TestCase):
                 self.assertFalse((root/'escape').exists())
 
     def test_zip_directory_bound_precedes_index_allocation(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory); destination = root/'out'; destination.mkdir()
-            path = self.zip_fixture(root)
-            raw = bytearray(path.read_bytes())
-            marker = raw.rfind(b'PK\x05\x06')
-            struct.pack_into('<H', raw, marker + 10, 65535)
-            path.write_bytes(raw)
-            with patch.object(receiver.zipfile, 'ZipFile', side_effect=AssertionError('must reject before parsing index')):
-                with self.assertRaisesRegex(ValueError, 'bounded_single_disk'):
-                    receiver.extract_zip(path, destination, b'{}')
+        for field, offset, fmt, value in [('entry-count', 10, '<H', 65535),
+                                           ('directory-size', 12, '<I', 65537)]:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory); destination = root/'out'; destination.mkdir()
+                path = self.zip_fixture(root)
+                raw = bytearray(path.read_bytes())
+                marker = raw.rfind(b'PK\x05\x06')
+                if field == 'directory-size':
+                    # Keep offset + size aligned with the end record, so this
+                    # specifically exercises the directory allocation cap.
+                    previous_size = struct.unpack_from('<I', raw, marker + offset)[0]
+                    padding = value - previous_size
+                    raw[marker:marker] = bytes(padding)
+                    marker += padding
+                struct.pack_into(fmt, raw, marker + offset, value)
+                path.write_bytes(raw)
+                with patch.object(receiver.zipfile, 'ZipFile', side_effect=AssertionError('must reject before parsing index')):
+                    with self.assertRaisesRegex(ValueError, 'bounded_single_disk'):
+                        receiver.extract_zip(path, destination, b'{}')
 
     def tar_fixture(self, root, rows):
         path = root/'fixture.tar'
