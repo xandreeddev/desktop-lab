@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-11-18",
-  "status": "implementation_ready_for_hosted_checks",
+  "status": "source_verified_native_followup_pending",
   "scope": "Control-panel navigation, closed-scene callbacks and prompt-bound power confirmation.",
   "changes": [
     "Audio Escape returns from application routing before closing the panel.",
@@ -15,8 +15,8 @@
     "python_cases_passed": 802,
     "catalogue_current": true,
     "catalogue_captures": 480,
-    "rust_execution_pending": true,
-    "hosted_visuals_pending": true,
+    "rust_execution_pending": false,
+    "hosted_visuals_pending": false,
     "native_vm_pending": true,
     "coverage": [
       "Audio nested Escape and root native keyboard declarations.",
@@ -25,9 +25,28 @@
       "Bluetooth closed controls, cancelled prompts, fresh incoming requests and Forget prompt replacement."
     ],
     "formatting_passed": true,
-    "diff_check_passed": true
+    "diff_check_passed": true,
+    "workspace_rust_cases_passed": 1144,
+    "controlled_service_cases_passed": 49,
+    "vulkan_comparisons_passed": 832,
+    "vulkan_pngs_byte_identical_to_baselines": 467,
+    "all_hosted_jobs_passed": true,
+    "hosted_run_id": 44266230371,
+    "hosted_run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/44266230371",
+    "visual_artifact_id": 14411747369,
+    "visual_archive_sha256": "c4953554cb3967afa43f9abb806de4566edfc3360a67248f7c8a7130b197c94f",
+    "all_case_pngs_crc_verified": true,
+    "strict_clippy_passed": true,
+    "optimized_arch_build_job_passed": true,
+    "optimized_arch_artifact_independently_received": false,
+    "reviewed_current_visual_samples": [
+      "audio-route-dark-1x",
+      "bluetooth-forget-dark-1x",
+      "power-confirmation-dark-1x"
+    ]
   },
   "vm_started": false,
   "native_accepted": false,
-  "full_polish_goal_complete": false
+  "full_polish_goal_complete": false,
+  "source_commit": "27aaffc7d78bf7673356547cdac6b065c1bd6761"
 }

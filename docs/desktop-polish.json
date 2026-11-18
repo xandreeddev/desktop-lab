@@ -82,7 +82,7 @@
     },
     {
       "id": "control-panels",
-      "status": "hosted_validation_in_progress",
+      "status": "source_verified_native_followup_pending",
       "behavior": "Bar controls switch panels in one click, with consistent focus, dismissal, loading, unavailable, retry and confirmation behavior.",
       "toolkit": "Reusable panel/popover focus scopes, controls and menu behavior driven by real client requirements.",
       "acceptance": [
@@ -91,7 +91,10 @@
         "Loading, unavailable, retry and confirmation states retain truthful backend state and explicit authority.",
         "Pass focused behavior tests and full hosted source/protocol/Vulkan checks; keep actual VM interactions deferred under the current user instruction."
       ],
-      "report": "reports/measurements/lucent-control-panel-polish.json"
+      "report": "reports/measurements/lucent-control-panel-polish.json",
+      "completed_checks": [
+        "Source27aaffc7d78b passes all four hosted jobs:1,144 workspace Rust cases,49 controlled service cases,832 Vulkan comparisons, integration/site and optimized Arch build. Artifact14411747369 archive digest and every case PNG CRC verified; three actual affected controls reviewed. VM acceptance remains deferred."
+      ]
     },
     {
       "id": "notifications",
@@ -133,7 +136,7 @@
     },
     {
       "id": "dashboard-and-media",
-      "status": "queued",
+      "status": "in_progress",
       "behavior": "Widgets, notes, calendar and media controls have complete editing, resizing, persistence, empty and error behavior.",
       "toolkit": "Controlled editors, sliders, pointer capture and reusable layout/input boundaries.",
       "identified_work": [
@@ -141,7 +144,8 @@
         "Retire seek previews and disable seek authority while a media command is pending.",
         "Represent system sampling loading, failure and recovery truthfully, retaining last-good data without presenting it as current.",
         "Make resized media content responsive and bound long title/artist metadata."
-      ]
+      ],
+      "active_slice": "Retire hidden Notes callbacks and busy media seek gestures; system observation and responsive presentation follow."
     },
     {
       "id": "appearance",
@@ -163,7 +167,7 @@
         "Preserve pending display apply cancellation across close then reopen before admission returns.",
         "Verify authentication control reachability on short outputs and long prompts before presentation-only changes; preserve all secure authority."
       ],
-      "active_slice": "Display confirmation identity and cancellation lifetime; broader output/session presentation remains queued.",
+      "active_slice": "Display confirmation source committed for hosted validation; broader output/session presentation remains queued.",
       "report": "reports/measurements/lucent-display-confirmation-polish.json"
     },
     {
