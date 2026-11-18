@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-11-18",
-  "status": "implementation_ready_for_hosted_checks",
+  "status": "hosted_behavior_and_visual_review_passed_fixture_rerun_pending",
   "scope": "Submitted wallpaper search paging and rendered selection authority in online and live wallpaper pickers.",
   "changes": [
     "Explicit Search submits the draft query from page one; paging retains the submitted provider and query.",
@@ -16,7 +16,7 @@
     "Generated wallpaper-browser tokens bound result metadata to one line and status text to two."
   ],
   "validation": {
-    "rust_execution_pending": true,
+    "rust_execution_pending": false,
     "hosted_visuals_pending": true,
     "native_vm_pending": true,
     "rustfmt_parse_passed": true,
@@ -33,7 +33,7 @@
     "expected_visual_changes": {
       "existing_browser_families": 3,
       "palette_density_cases": 12,
-      "hosted_review_pending": true
+      "hosted_review_pending": false
     },
     "coverage_authored": [
       "Actual rendered page callbacks after a draft edit, submitted-search paging and explicit new Search.",
@@ -60,6 +60,56 @@
         "failure": "New refresh fixture expected no subscription before the cancelled preview returned. Production retains cancellation ownership until Ended. Fixture now executes and delivers the real terminal acknowledgement before asserting no subscription, retaining stale-action checks.",
         "protocol_and_visual_steps": "not_run_after_workspace_failure",
         "log": ".cache/launcher-polish-checks/appearance-ci-5f86-job.log"
+      },
+      {
+        "source_commit": "270f6d73f4aa6cb8740d10b947d350f109fbe32d",
+        "run_id": 44281095488,
+        "rust_job_id": 134721699574,
+        "strict_clippy_passed": true,
+        "workspace_passed": true,
+        "workspace_cases_passed": 1222,
+        "controlled_protocol_cases_passed": 49,
+        "integration_site_arch_passed": true,
+        "visual_cases": 876,
+        "visual_passed_cases": 870,
+        "visual_differences": [
+          {
+            "case": "wallpapers-online-error-dark-1x",
+            "result": "3.025% changed pixels; worst tile 50.00%"
+          },
+          {
+            "case": "wallpapers-online-error-dark-2x",
+            "result": "3.009% changed pixels; worst tile 100.00%"
+          },
+          {
+            "case": "live-wallpaper-monitor-dark-2x",
+            "result": "0.010% changed pixels; worst tile 2.10%"
+          },
+          {
+            "case": "wallpapers-online-error-light-1x",
+            "result": "3.024% changed pixels; worst tile 50.00%"
+          },
+          {
+            "case": "wallpapers-online-error-light-2x",
+            "result": "3.005% changed pixels; worst tile 100.00%"
+          },
+          {
+            "case": "live-wallpaper-monitor-light-2x",
+            "result": "0.010% changed pixels; worst tile 2.15%"
+          }
+        ],
+        "artifact_id": 14418975107,
+        "archive_sha256": "d489a0924b64967c45d5e2cc53cac2f71491e7373129ccb3b74e8d498967e993",
+        "all_case_pngs_present_and_crc_verified": true,
+        "promoted_cases": [
+          "wallpapers-online-error-dark-1x",
+          "wallpapers-online-error-dark-2x",
+          "wallpapers-online-error-light-1x",
+          "wallpapers-online-error-light-2x"
+        ],
+        "fixture_correction_required": "Two scrollbar-tip differences expose a stale fixture sending Target while closed. Fixture now opens first, routes through Desktop and asserts exact monitor. Existing two baselines preserved; corrected hosted render pending.",
+        "log": ".cache/launcher-polish-checks/appearance-ci-270f-job.log",
+        "review_receipt": ".cache/launcher-polish-checks/ci-visual-270f6d73f4aa-14418975107/receipt.json"
       }
     ],
     "component_catalogue": {

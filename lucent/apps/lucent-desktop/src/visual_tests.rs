@@ -3789,15 +3789,6 @@ fn visual_regressions() {
                         paused: name.contains("paused"),
                         enabled: true,
                     });
-                    if name.contains("monitor") {
-                        let monitor = MonitorId::new("DEMO-1").unwrap();
-                        app.live_wallpaper.update(
-                            crate::live_wallpaper::Message::Target(LiveWallpaperTarget::Monitor(
-                                monitor,
-                            )),
-                            &mut Effects::default(),
-                        );
-                    }
                     if name.contains("save-error") {
                         app.persistence
                             .request(&app.settings, &mut Effects::default());
@@ -3831,6 +3822,18 @@ fn visual_regressions() {
                     }
                 }
                 open_live_fixture(&mut app);
+                if name.contains("monitor") {
+                    let target = lucent_domain::LiveWallpaperTarget::Monitor(
+                        lucent_domain::MonitorId::new("DEMO-1").unwrap(),
+                    );
+                    app.update(
+                        Message::LiveWallpaper(crate::live_wallpaper::Message::Target(
+                            target.clone(),
+                        )),
+                        &mut Effects::default(),
+                    );
+                    assert_eq!(app.live_wallpaper.target, target);
+                }
                 if name.contains("policy")
                     || name.contains("save-error")
                     || name.contains("paused")

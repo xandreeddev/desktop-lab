@@ -156,7 +156,7 @@
     },
     {
       "id": "appearance",
-      "status": "implementation_ready_for_hosted_checks",
+      "status": "hosted_behavior_and_visual_review_passed_fixture_rerun_pending",
       "behavior": "Palette and wallpaper browsing, previews, applying, cancellation and failures share consistent motion, spacing and density.",
       "toolkit": "Prepared assets, streaming textures, clipping, motion and cache ownership.",
       "identified_work": [
@@ -165,7 +165,7 @@
         "Bind online result selection and download callbacks to the rendered result and selection lifetime; reject retired form callbacks before root admission."
       ],
       "report": "reports/measurements/lucent-appearance-selection-polish.json",
-      "active_slice": "Submitted-query pagination, exact selection lifetimes, disabled controls and bounded metadata are ready for hosted behavior and visual checks."
+      "active_slice": "Source270f passes1,222 workspace cases,49 controlled protocol cases and strictClippy. Four reviewed browser-error baselines are accepted; a stale monitor fixture was corrected without replacing its two baselines. Consolidated hosted rerun and native acceptance remain pending."
     },
     {
       "id": "outputs-and-session",
