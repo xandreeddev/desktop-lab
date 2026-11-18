@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-18",
+  "status": "implementation_ready_for_hosted_checks",
+  "scope": "Bounded system sampling and truthful loading, stale and recovered widget presentation.",
+  "changes": [
+    "CPU intervals distinguish unknown from measured idle and reset after failed or regressing observations.",
+    "Aggregate CPU and memory parsing validates complete bounded input without double-counting guest CPU time.",
+    "The desktop preserves last-good data while presenting availability separately and retaining targeted redraw routing.",
+    "The widget uses existing design tokens and placeholders or muted last-reading labels without sampling in views."
+  ],
+  "validation": {
+    "rust_execution_pending": true,
+    "hosted_visuals_pending": true,
+    "native_vm_pending": true,
+    "coverage": [
+      "Domain validation, CPU warmup/idle/busy/reset intervals, overflow, malformed/duplicate/inconsistent fields, bounded reads and file failures.",
+      "Initial failure, repeated error, identical-value recovery, invalid injected samples, hidden widgets and per-output group redraws.",
+      "Six state fixtures and full-label geometry checks at narrow and regular outputs in both palettes."
+    ],
+    "formatting_passed": true,
+    "diff_check_passed": true,
+    "architecture_cases_passed": 26
+  },
+  "vm_started": false,
+  "native_accepted": false,
+  "full_polish_goal_complete": false
+}

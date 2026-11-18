@@ -4,6 +4,7 @@ mod application_actions;
 mod displays;
 mod live_previews;
 mod overlays;
+mod system_status;
 use crate::desktop::{Desktop, Message};
 use crate::launcher::{self, Mode};
 use lucent_api::*;
@@ -1994,6 +1995,12 @@ fn visual_regressions() {
             ("widget-resize-small", Mode::Apps, 0, 0, "", 1., 390.),
             ("widget-edit-keyboard", Mode::Apps, 0, 0, "", 1., 640.),
             ("widget-editor", Mode::Apps, 0, 0, "", 1., 960.),
+            ("system-loading", Mode::Apps, 0, 0, "", 1., 320.),
+            ("system-unavailable", Mode::Apps, 0, 0, "", 1., 320.),
+            ("system-warming", Mode::Apps, 0, 0, "", 1., 320.),
+            ("system-ready", Mode::Apps, 0, 0, "", 1., 320.),
+            ("system-stale", Mode::Apps, 0, 0, "", 1., 320.),
+            ("system-recovered", Mode::Apps, 0, 0, "", 1., 320.),
             ("monitor-widgets-left", Mode::Apps, 0, 0, "", 1., 960.),
             ("monitor-widgets-right", Mode::Apps, 0, 0, "", 1., 960.),
             ("monitor-grid-right", Mode::Apps, 0, 0, "", 1., 960.),
@@ -2287,6 +2294,8 @@ fn visual_regressions() {
                 320.
             } else if name.starts_with("notification-toast-small") {
                 280.
+            } else if name.starts_with("system-") {
+                240.
             } else if name.starts_with("launcher-size-") {
                 1080.
             } else if name.starts_with("notes-") || name == "application-actions-narrow" {
@@ -2368,6 +2377,17 @@ fn visual_regressions() {
             }
             let scene = if name.starts_with("tooltip-") || name.starts_with("popover-controls") {
                 overlays::fixture(name, &mut app, &layout, now, width, height)
+            } else if name.starts_with("system-") {
+                system_status::prepare(&mut app, name);
+                let cx = ViewContext {
+                    surface: "widgets",
+                    instance: None,
+                    width,
+                    height,
+                    now,
+                    density: Density::ONE,
+                };
+                layout.build(&app.view(&cx), width, height, &Interaction::default(), now)
             } else if name.starts_with("panel-host-") {
                 let role = match name {
                     "panel-host-audio" => {

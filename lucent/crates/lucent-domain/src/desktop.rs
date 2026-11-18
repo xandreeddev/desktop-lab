@@ -485,9 +485,48 @@ pub struct ClockSnapshot {
 }
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SystemSnapshot {
-    pub cpu_percent: f32,
+    /// None while an interval is being established or its counters have reset.
+    pub cpu_percent: Option<f32>,
     pub memory_used_mib: u64,
     pub memory_total_mib: u64,
+}
+impl SystemSnapshot {
+    pub fn validate(&self) -> Result<()> {
+        if self
+            .cpu_percent
+            .is_some_and(|value| !value.is_finite() || !(0. ..=100.).contains(&value))
+            || self.memory_total_mib == 0
+            || self.memory_used_mib > self.memory_total_mib
+        {
+            return Err(DomainError::Invalid("Invalid system sample".into()));
+        }
+        Ok(())
+    }
+}
+#[cfg(test)]
+mod system_snapshot_tests {
+    use super::*;
+    #[test]
+    fn unknown_cpu_is_distinct_from_idle_and_memory_must_be_consistent() {
+        let mut sample = SystemSnapshot {
+            cpu_percent: None,
+            memory_used_mib: 0,
+            memory_total_mib: 8,
+        };
+        assert!(sample.validate().is_ok());
+        for cpu in [0., 50., 100.] {
+            sample.cpu_percent = Some(cpu);
+            assert!(sample.validate().is_ok());
+        }
+        for cpu in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1., 100.1] {
+            sample.cpu_percent = Some(cpu);
+            assert!(sample.validate().is_err());
+        }
+        sample.cpu_percent = None;
+        sample.memory_used_mib = 9;
+        assert!(sample.validate().is_err());
+        assert!(SystemSnapshot::default().validate().is_err());
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Wallpaper {

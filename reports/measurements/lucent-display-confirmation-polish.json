@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-11-18",
-  "status": "implementation_ready_for_hosted_checks",
+  "status": "hosted_behavior_passed_visual_review_pending",
   "scope": "Display confirmation and cancellation lifetimes, using the existing native transaction guardian.",
   "changes": [
     "Keep and Revert callbacks retain the rendered transaction and panel lifetime instead of resolving the latest transaction at delivery.",
@@ -10,7 +10,7 @@
     "Internal rollback retains exact transaction identity and remains valid before the confirmation snapshot."
   ],
   "validation": {
-    "rust_execution_pending": true,
+    "rust_execution_pending": false,
     "hosted_visuals_pending": true,
     "native_vm_pending": true,
     "coverage": [
@@ -20,7 +20,21 @@
     ],
     "architecture_cases_passed": 26,
     "formatting_passed": true,
-    "diff_check_passed": true
+    "diff_check_passed": true,
+    "hosted": {
+      "source_commit": "4bdbb7d897f8a3d2018a536e56eaebfbe7690682",
+      "run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/44269775162",
+      "rust_job_id": 134683168285,
+      "workspace_tests_passed": 1177,
+      "service_protocol_cases_passed": 49,
+      "strict_clippy_passed": true,
+      "site_passed": true,
+      "integration_passed": true,
+      "arch_bundle_build_passed": true,
+      "visual_step_passed": false,
+      "visual_failure_scope": "Notification baseline changes awaiting review; full visual acceptance remains pending.",
+      "raw_log": ".cache/launcher-polish-checks/tray-display-rust-4bdb.log"
+    }
   },
   "vm_started": false,
   "native_accepted": false,

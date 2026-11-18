@@ -12,6 +12,8 @@ pub mod power;
 pub mod session;
 mod settings;
 pub use settings::JsonSettings;
+mod system;
+pub use system::SystemProbe;
 pub mod tray;
 pub mod video;
 pub mod wallpapers;
@@ -165,55 +167,6 @@ mod calendar_adapter_tests {
                 reference.weekday().num_days_from_monday()
             );
         }
-    }
-}
-#[derive(Default)]
-pub struct SystemProbe {
-    previous: Option<(u64, u64)>,
-}
-impl SystemProbe {
-    pub fn sample(&mut self) -> Result<SystemSnapshot> {
-        let stat = fs::read_to_string("/proc/stat")
-            .map_err(|e| DomainError::Unavailable(e.to_string()))?;
-        let values: Vec<u64> = stat
-            .lines()
-            .next()
-            .unwrap_or("")
-            .split_whitespace()
-            .skip(1)
-            .take(8)
-            .filter_map(|n| n.parse().ok())
-            .collect();
-        let total = values.iter().sum::<u64>();
-        let idle = values.get(3).copied().unwrap_or(0) + values.get(4).copied().unwrap_or(0);
-        let cpu = self
-            .previous
-            .map(|(t, i)| {
-                let dt = total.saturating_sub(t);
-                if dt == 0 {
-                    0.
-                } else {
-                    100. * (dt.saturating_sub(idle.saturating_sub(i))) as f32 / dt as f32
-                }
-            })
-            .unwrap_or(0.);
-        self.previous = Some((total, idle));
-        let mem = fs::read_to_string("/proc/meminfo").unwrap_or_default();
-        let memory = |name: &str| {
-            mem.lines()
-                .find(|l| l.starts_with(name))
-                .and_then(|l| l.split_whitespace().nth(1))
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(0)
-                / 1024
-        };
-        let total = memory("MemTotal:");
-        let available = memory("MemAvailable:");
-        Ok(SystemSnapshot {
-            cpu_percent: cpu,
-            memory_used_mib: total.saturating_sub(available),
-            memory_total_mib: total,
-        })
     }
 }
 pub fn wallpapers() -> Vec<Wallpaper> {

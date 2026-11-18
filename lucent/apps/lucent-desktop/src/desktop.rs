@@ -152,7 +152,7 @@ pub struct Desktop {
     pub compositor_available: bool,
     pub compositor_error: String,
     pub clock: ClockSnapshot,
-    pub system: SystemSnapshot,
+    pub system: crate::system::System,
     pub audio: crate::audio::Audio,
     pub network: crate::network::Network,
     pub bluetooth: crate::bluetooth::Bluetooth,
@@ -214,7 +214,7 @@ impl Desktop {
             compositor_available: false,
             compositor_error: String::new(),
             clock: adapters.clock.now(),
-            system: SystemSnapshot::default(),
+            system: crate::system::System::default(),
             audio: crate::audio::Audio::new(adapters.audio.clone()),
             network: crate::network::Network::new(adapters.network.clone()),
             bluetooth: crate::bluetooth::Bluetooth::new(adapters.bluetooth.clone()),
@@ -1706,13 +1706,11 @@ impl Component for Desktop {
                 }
                 self.clock = clock;
             }
-            Message::System(Ok(value)) => {
-                if self.system != value {
-                    self.system = value;
+            Message::System(value) => {
+                if self.system.observe(value) {
                     self.redraw_widget("system", effects);
                 }
             }
-            Message::System(Err(_)) => {}
             Message::Audio(message) => {
                 let was_open = self.audio.open();
                 effects.delegate(|child| self.audio.update(message, child), Message::Audio);
@@ -3377,6 +3375,7 @@ impl api::Application for Desktop {
             "total": crate::previews::usage(self.images.values().chain(self.previews.images()).chain(self.browser.previews.values()).chain(self.wallpaper.background.iter())),
         }, "palette":lucent_design::selected_palette(&self.settings),"wallpaper_browser":{"source":self.browser.source,"query":self.browser.query,"page":self.browser.page,"count":self.browser.items.len(),"selected":self.browser.selected,"busy":self.browser.busy(),"status":self.browser.status},"theme": ThemeMode::from_light(self.settings.light).name(), "theme_error": self.theme_error, "bar_visible": self.bar_visible, "background_ready": self.wallpaper.background.is_some(), "wallpaper": self.wallpaper.current, "wallpaper_busy": self.wallpaper.busy(), "notifications_ready":self.notifications.ready,"notification_history_open":self.notifications.history_open(),"notification_count":self.notifications.snapshot.active.len(),"launcher":self.launcher.open(),"launcher_size":self.settings.launcher,"launcher_panel_size":[self.launcher.panel_width().target_value(),self.launcher.panel_height().target_value()],"mode":self.launcher.mode().name(),"query":self.launcher.query(),"selected":self.launcher.selected(),"result_count":self.launcher.result_count(),"applications":self.apps.len(),"mapped_icons":self.apps.iter().filter(|a|lucent_design::app_icons::lookup(a.id.as_str()).is_some()).count(),"workspaces":self.compositor.workspaces.iter().map(|w|serde_json::json!({"id":w.id.number(),"name":w.id.name(),"special":w.id.is_special(),"active":w.active})).collect::<Vec<_>>(),"widgets":self.active_widget_layout().visible_widgets,"positions":self.active_widget_layout().positions,"widget_grid":self.active_widgets().grid_visible(),"widget_surfaces":self.active_widgets().surfaces(self.active_widget_layout(),self.viewport).iter().map(|s|serde_json::json!({"id":s.id,"members":s.members,"x":s.rect.x,"y":s.rect.y,"width":s.rect.w,"height":s.rect.h})).collect::<Vec<_>>(),"notes":self.settings.notes,"timer_seconds":self.active_widgets().timer_remaining(),"error":self.error_message(),"settings_error":self.settings_error,"settings_save_status":self.persistence.status(self.settings_writable).name(),"settings_save_error":self.persistence.error(),"wallpaper_error":self.wallpaper.error,"settings_writable":self.settings_writable});
         value["live_wallpaper"] = self.live_wallpaper.inspect();
+        value["system"] = self.system.inspect();
         value["notification_artwork"] = self.notifications.artwork_inspection();
         value["network"] = self.network.inspect();
         value["bluetooth"] = self.bluetooth.inspect();

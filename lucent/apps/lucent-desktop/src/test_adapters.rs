@@ -56,7 +56,11 @@ impl ThemePort for Fake {
 }
 impl SystemPort for Fake {
     fn sample(&self) -> Result<SystemSnapshot> {
-        Ok(SystemSnapshot::default())
+        Ok(SystemSnapshot {
+            cpu_percent: Some(0.),
+            memory_used_mib: 4096,
+            memory_total_mib: 16384,
+        })
     }
 }
 impl AudioPort for Fake {

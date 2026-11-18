@@ -57,7 +57,7 @@ fn transitive() -> WidgetLayout {
 }
 fn sample(cpu_percent: f32) -> SystemSnapshot {
     SystemSnapshot {
-        cpu_percent,
+        cpu_percent: Some(cpu_percent),
         memory_used_mib: 4096,
         memory_total_mib: 16384,
     }
@@ -128,7 +128,9 @@ fn drag(app: &mut Desktop, monitor: Option<&str>, widget: &str) {
 fn system_first_and_repeated_unchanged_samples_do_not_redraw_the_standalone_bar() {
     let mut app = desktop();
     app.settings.layout = separated();
-    let initial = app.system.clone();
+    let initial = sample(0.);
+    let effects = dispatch(&mut app, Ok(initial.clone()));
+    assert_redraw(&app, &effects, &[address("system", None)]);
     for _ in 0..2 {
         let effects = dispatch(&mut app, Ok(initial.clone()));
         assert_redraw(&app, &effects, &[]);
@@ -140,9 +142,9 @@ fn system_first_and_repeated_unchanged_samples_do_not_redraw_the_standalone_bar(
 fn system_unchanged_samples_do_not_redraw_but_fractional_and_memory_changes_do() {
     let mut app = desktop();
     app.settings.layout = separated();
-    let initial = app.system.clone();
+    let initial = sample(0.);
     let effects = dispatch(&mut app, Ok(initial));
-    assert_redraw(&app, &effects, &[]);
+    assert_redraw(&app, &effects, &[address("system", None)]);
 
     for value in [
         sample(20.25),
@@ -157,7 +159,7 @@ fn system_unchanged_samples_do_not_redraw_but_fractional_and_memory_changes_do()
         },
     ] {
         let effects = dispatch(&mut app, Ok(value.clone()));
-        assert_eq!(app.system, value);
+        assert_eq!(app.system.snapshot(), Some(&value));
         assert_redraw(&app, &effects, &[address("system", None)]);
         let effects = dispatch(&mut app, Ok(value));
         assert_redraw(&app, &effects, &[]);
@@ -173,12 +175,14 @@ fn system_hidden_updates_retain_observation_without_drawing_and_errors_keep_last
         .insert(id("disconnected"), separated());
     let value = sample(35.);
     let effects = dispatch(&mut app, Ok(value.clone()));
-    assert_eq!(app.system, value);
+    assert_eq!(app.system.snapshot(), Some(&value));
     assert_redraw(&app, &effects, &[]);
     let effects = dispatch(&mut app, Err(DomainError::Unavailable("fixture".into())));
-    assert_eq!(app.system, value);
+    assert_eq!(app.system.snapshot(), Some(&value));
     assert_redraw(&app, &effects, &[]);
 }
+
+mod observation;
 
 #[test]
 fn system_redraw_follows_transitive_membership_and_not_the_widget_role() {

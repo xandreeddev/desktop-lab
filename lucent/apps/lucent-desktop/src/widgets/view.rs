@@ -3,7 +3,7 @@ use super::{Host, Message, surfaces, widget_size};
 use crate::{artwork::Artwork, persistence::Status};
 use lucent_api::*;
 use lucent_design::*;
-use lucent_domain::{ClockSnapshot, Date, SystemSnapshot, TimerPhase, WidgetLayout};
+use lucent_domain::{ClockSnapshot, Date, TimerPhase, WidgetLayout};
 
 #[derive(Clone, Copy)]
 pub struct Input<'a> {
@@ -11,7 +11,7 @@ pub struct Input<'a> {
     pub notes: &'a str,
     pub save_status: Status,
     pub clock: &'a ClockSnapshot,
-    pub system: &'a SystemSnapshot,
+    pub system: &'a crate::system::System,
     pub network_status: &'a str,
     pub media: &'a crate::media::Media,
     pub weather: &'a crate::weather::Weather,
@@ -489,20 +489,60 @@ pub(super) fn media(d: &View<'_>, _: &ViewContext) -> Element<Message> {
     .fill()
 }
 pub(super) fn system(d: &View<'_>, _: &ViewContext) -> Element<Message> {
-    let mem = &d.input.system;
-    let fraction = if mem.memory_total_mib == 0 {
-        0.
+    use crate::system::Status;
+    let system = d.input.system;
+    let sample = system.snapshot();
+    let fraction = sample.map_or(0., |sample| {
+        sample.memory_used_mib as f32 / sample.memory_total_mib as f32
+    });
+    let cpu = sample.and_then(|sample| sample.cpu_percent);
+    let heading = match system.status() {
+        Status::Loading => "System · Loading",
+        Status::Ready => "System",
+        Status::Unavailable if sample.is_some() => "System · Last reading",
+        Status::Unavailable => "System · Unavailable",
+    };
+    let cpu_label = cpu.map_or_else(
+        || {
+            if system.status() == Status::Ready {
+                "CPU   Collecting…"
+            } else {
+                "CPU   —"
+            }
+            .into()
+        },
+        |cpu| format!("CPU   {cpu:.0}%"),
+    );
+    let memory_label = sample.map_or_else(
+        || "Memory   —".into(),
+        |sample| {
+            format!(
+                "Memory   {} / {} MiB",
+                sample.memory_used_mib, sample.memory_total_mib
+            )
+        },
+    );
+    let reading_color = if system.status() == Status::Unavailable {
+        d.ink().alpha(opacity::MUTED)
     } else {
-        mem.memory_used_mib as f32 / mem.memory_total_mib as f32
+        d.ink()
+    };
+    let progress_color = if system.status() == Status::Unavailable {
+        d.accent().alpha(opacity::MUTED)
+    } else {
+        d.accent()
     };
     Element::stack(vec![
-        d.label("System", font::HEADING)
+        d.label(heading, font::HEADING)
+            .wrap(1)
             .at(component::system::INSET, component::system::HEADING_TOP)
             .size(
                 component::system::CONTENT_WIDTH,
                 component::system::HEADING_HEIGHT,
             ),
-        d.label(format!("CPU   {:.0}%", mem.cpu_percent), font::BODY)
+        d.label(cpu_label, font::BODY)
+            .wrap(1)
+            .color(reading_color)
             .at(component::system::INSET, component::system::CPU_TOP)
             .size(
                 component::system::CONTENT_WIDTH,
@@ -521,7 +561,7 @@ pub(super) fn system(d: &View<'_>, _: &ViewContext) -> Element<Message> {
             .background(d.surface_color()),
         Element::empty()
             .size(
-                component::system::CONTENT_WIDTH * (mem.cpu_percent / 100.).clamp(0., 1.),
+                component::system::CONTENT_WIDTH * cpu.unwrap_or(0.) / 100.,
                 component::system::PROGRESS_HEIGHT,
             )
             .at(
@@ -529,19 +569,15 @@ pub(super) fn system(d: &View<'_>, _: &ViewContext) -> Element<Message> {
                 component::system::CPU_PROGRESS_TOP,
             )
             .radius(radius::INDICATOR)
-            .background(d.accent()),
-        d.label(
-            format!(
-                "Memory   {} / {} MiB",
-                mem.memory_used_mib, mem.memory_total_mib
+            .background(progress_color),
+        d.label(memory_label, font::SMALL)
+            .wrap(1)
+            .color(reading_color)
+            .at(component::system::INSET, component::system::MEMORY_TOP)
+            .size(
+                component::system::CONTENT_WIDTH,
+                component::system::LABEL_HEIGHT,
             ),
-            font::SMALL,
-        )
-        .at(component::system::INSET, component::system::MEMORY_TOP)
-        .size(
-            component::system::CONTENT_WIDTH,
-            component::system::LABEL_HEIGHT,
-        ),
         Element::empty()
             .size(
                 component::system::CONTENT_WIDTH,
@@ -563,7 +599,7 @@ pub(super) fn system(d: &View<'_>, _: &ViewContext) -> Element<Message> {
                 component::system::MEMORY_PROGRESS_TOP,
             )
             .radius(radius::INDICATOR)
-            .background(d.accent()),
+            .background(progress_color),
         d.label(d.input.network_status, font::CAPTION)
             .at(component::system::INSET, component::system::NETWORK_TOP)
             .size(

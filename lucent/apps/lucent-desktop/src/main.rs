@@ -24,6 +24,7 @@ mod ports;
 mod power;
 mod previews;
 mod shell_layout;
+mod system;
 mod tray;
 mod views;
 mod wallpaper_browser;
