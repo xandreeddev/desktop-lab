@@ -73,41 +73,56 @@
     }
   ],
   "latest_hosted_application_checkpoint": {
-    "source_commit": "30ed89acb7d31fb8103dbd34bf68f0bdc845a983",
-    "run_id": 44286964583,
-    "run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/44286964583",
-    "rust_job_id": 134741997065,
+    "source_commit": "9efaf308bce3f6267689d6ba852b34401cf483ef",
+    "run_id": 44290561050,
+    "rust_job_id": 134754404950,
+    "strict_clippy_passed": true,
     "workspace_cases_passed": 1247,
     "controlled_protocol_cases_passed": 49,
-    "strict_clippy_passed": true,
+    "integration_Python_cases_passed": 919,
+    "site_integration_arch_passed": true,
+    "visual_cases": 944,
+    "visual_passed_cases": 932,
+    "artifact_id": 14423605392,
+    "archive_sha256": "0eaede7cbbf2bbd057798d77d71c0862e11655f8f89e34bcd456fb889c8b9044",
+    "all_case_pngs_present_and_crc_verified": true,
+    "corrected_session_tail_images_reviewed": 12,
+    "session_baselines_promoted": [
+      "session-lock-last-dark-1x",
+      "session-lock-last-dark-2x",
+      "session-greeter-last-dark-1x",
+      "session-greeter-last-dark-2x",
+      "session-authorization-last-dark-1x",
+      "session-authorization-last-dark-2x",
+      "session-lock-last-light-1x",
+      "session-lock-last-light-2x",
+      "session-greeter-last-light-1x",
+      "session-greeter-last-light-2x",
+      "session-authorization-last-light-1x",
+      "session-authorization-last-light-2x"
+    ],
+    "all_existing_baselines_passed": true,
+    "failure_scope": "Twelve missing session-tail baselines, now independently reviewed and accepted. A final full comparison remains required.",
+    "log": ".cache/launcher-polish-checks/consolidated-9efaf-rust.log",
+    "review_receipt": ".cache/launcher-polish-checks/ci-visual-9efaf308bce3-14423605392/receipt.json",
     "all_standard_jobs_passed": false,
     "rust_job_conclusion": "failure",
     "failure_step": "Native Vulkan visual regressions",
-    "visual": {
-      "cases": 944,
-      "passed_cases": 864,
-      "differences": 80,
-      "session_differences": 56,
-      "new_media_widget_cases": 24,
-      "artifact_id": 14418844884,
-      "archive_sha256": "c9766ae7f40250eaad1b0595253a7a8b8d2b54186e388db2f6dfe4934223250c",
-      "github_archive_digest_matched": true,
-      "all_case_pngs_present_and_crc_verified": true,
-      "receipt": ".cache/launcher-polish-checks/ci-visual-30ed89acb7d3-14418844884/receipt.json",
-      "scope": "This source predates the later session baseline and tail-focus fixture updates. Expected difference scope does not constitute visual approval or a passing job."
-    },
-    "log": ".cache/launcher-polish-checks/media-ci-30ed-job.log"
+    "run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/44290561050"
   },
   "visual_review_followup": {
     "session_review_source": "33dbd58ad72ed41307b311161250dc24832c956b",
     "session_cases_reviewed": 56,
-    "session_cases_accepted": 44,
-    "session_tail_cases_withheld": 12,
+    "session_cases_accepted": 56,
+    "session_tail_cases_withheld": 0,
     "session_baseline_and_fixture_commit": "8bd2024c86c",
-    "session_tail_reason": "The old tail fixture discarded actual BackTab/End focus during message mapping and re-autofocused the secret field. Focus preservation is corrected; fresh hosted images remain required before approval.",
+    "session_tail_reason": "Original 33db tail images remain withheld as historical evidence. Corrected 9efaf images preserve actual public-scroll keyboard focus, show fully visible END and fixed actions, and passed independent review in all twelve variants.",
     "media_widget_cases_awaiting_review": 0,
     "consolidated_visual_rerun_pending": true,
-    "media_widget_cases_reviewed_and_accepted": 24
+    "media_widget_cases_reviewed_and_accepted": 24,
+    "corrected_session_tail_source": "9efaf308bce3f6267689d6ba852b34401cf483ef",
+    "corrected_session_tail_cases_reviewed_and_accepted": 12,
+    "corrected_session_tail_receipt": ".cache/launcher-polish-checks/ci-visual-9efaf308bce3-14423605392/receipt.json"
   },
   "component_catalogue": {
     "source_commit": "30ed89acb7d31fb8103dbd34bf68f0bdc845a983",
@@ -169,7 +184,7 @@
     "coherent_archive_independently_verified": false,
     "fresh_release_catalogue_reviewed": false,
     "pending": [
-      "Review new Media images and freshly rendered corrected session tail fixtures, then verify the complete production visual matrix.",
+      "Verify the complete production visual matrix after accepting the twelve reviewed corrected session-tail images.",
       "Pin the final application commit/tree and obtain success for all four standard jobs, including all 49 controlled protocol cases.",
       "Build the coherent six-client/support archive remotely, bind its terminal run/job and source to the original receipt/artifact, and verify all payload hashes and static ELF evidence offline.",
       "Review the fresh release catalogue with matching producer fingerprints and inventory; retain differing images rather than silently promote them."
@@ -187,7 +202,28 @@
     "eligible_resource_and_pacing_accepted": false,
     "physical_hardware_accepted": false,
     "protected_main_delivery": "PR117 awaits GitHub API writer permission; SSH pushes and hosted CI remain available.",
-    "scope": "The existing VM stays off under the user's memory instruction. Earlier installation, native passes, failures and ineligible resource observations retain their original source and measurement scope."
+    "scope": "The existing VM stays off under the user's memory instruction. Earlier installation, native passes, failures and ineligible resource observations retain their original source and measurement scope.",
+    "installation_contract": {
+      "archive_role": "Candidate for later native qualification, not a validated installation.",
+      "review_payload_modes": "Receiver payload remains immutable and nonexecutable (0600). Separately verified staging copies must supply executable modes.",
+      "existing_full_cohort_deployer_compatible": false,
+      "reason": "Historical cached six-client transaction pins an older source/qualification shape and support allowlist. The repository development deployer accepts only three clients and seven theme files.",
+      "changed_support_destination_map": {
+        "scripts/clipboard_store.py": "clipboard_store.py",
+        "scripts/lucent-compat.py": "compat.py",
+        "scripts/lucent-controls.py": "controls.py",
+        "scripts/lucent-menu-routes.py": "menu_routes.py",
+        "scripts/lucent-menu.py": "menu.py"
+      },
+      "future_preserving_transaction_requirements": [
+        "Consume verified receiver-bound relative payload paths and current hosted_release_gate evidence without fabricating historical fields or test counts.",
+        "Expand both transaction support allowlists for the changed utilities and preserve unchanged supervisor/readiness files.",
+        "Bind rollback and live identities to the actual b574 ordinary plus d77 secure/support cohort after VM use is authorized.",
+        "Adapt launcher acceptance bundle admission explicitly; raw coherent payload is not a three-client development bundle."
+      ],
+      "resource_collector_manifest_compatible": true,
+      "new_setup_or_login_provisioning_not_used": "Setup tools change units/themes/integration/greetd configuration and are not the preserving update transaction."
+    }
   },
   "historical_evidence_preserved": true,
   "full_polish_goal_complete": false,
@@ -200,5 +236,31 @@
       "keyboard_handoff": "keyboard-focus"
     },
     "scope": "Reviewed the existing backlog implementation items and toolkit consumer coverage. This does not establish universal feature parity, native behavior or performance."
+  },
+  "prior_hosted_application_checkpoint": {
+    "source_commit": "30ed89acb7d31fb8103dbd34bf68f0bdc845a983",
+    "run_id": 44286964583,
+    "run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/44286964583",
+    "rust_job_id": 134741997065,
+    "workspace_cases_passed": 1247,
+    "controlled_protocol_cases_passed": 49,
+    "strict_clippy_passed": true,
+    "all_standard_jobs_passed": false,
+    "rust_job_conclusion": "failure",
+    "failure_step": "Native Vulkan visual regressions",
+    "visual": {
+      "cases": 944,
+      "passed_cases": 864,
+      "differences": 80,
+      "session_differences": 56,
+      "new_media_widget_cases": 24,
+      "artifact_id": 14418844884,
+      "archive_sha256": "c9766ae7f40250eaad1b0595253a7a8b8d2b54186e388db2f6dfe4934223250c",
+      "github_archive_digest_matched": true,
+      "all_case_pngs_present_and_crc_verified": true,
+      "receipt": ".cache/launcher-polish-checks/ci-visual-30ed89acb7d3-14418844884/receipt.json",
+      "scope": "This source predates the later session baseline and tail-focus fixture updates. Expected difference scope does not constitute visual approval or a passing job."
+    },
+    "log": ".cache/launcher-polish-checks/media-ci-30ed-job.log"
   }
 }

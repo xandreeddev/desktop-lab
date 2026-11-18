@@ -41,6 +41,7 @@ presentation. Synthetic Vulkan fixtures cover compact initial, long and final
 scroll positions plus connecting/verifying authorization. This slice adds no
 SDK API; the independent `scroll-list` consumer already exercises capped natural
 scroll sizing. See the [source-specific report](../reports/measurements/lucent-session-presentation-polish.json)
-for executed checks. Hosted behavior checks pass; final visual comparison and
-focus-fixture rendering remain pending. Native VM interaction remains deferred under the
+for executed checks. Hosted behavior checks and review of all 56 session variants pass, including
+the corrected keyboard-focus tail fixtures. The final full visual comparison
+remains pending. Native VM interaction remains deferred under the
 user's instruction to keep the VM stopped.

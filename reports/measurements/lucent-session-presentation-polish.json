@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-11-18",
-  "status": "hosted_behavior_passed_partial_visual_approval_pending",
+  "status": "hosted_behavior_and_visual_review_passed_baseline_rerun_pending",
   "scope": "Shared lock, login and authorization presentation on short outputs and long public prompts; authentication authority is unchanged.",
   "changes": [
     "Naturally sized centered cards use the existing 460-pixel maximum and actual output margins.",
@@ -22,7 +22,7 @@
   },
   "validation": {
     "rust_execution_pending": false,
-    "hosted_visuals_pending": true,
+    "hosted_visuals_pending": false,
     "native_vm_pending": true,
     "visual_fixture_families_added": 11,
     "visual_theme_density_combinations_per_family": 4,
@@ -132,6 +132,40 @@
         "other_differences": "Four browser error PNGs byte-identical to already approved baselines; two monitor fixture diffs corrected separately without promotion.",
         "log": ".cache/launcher-polish-checks/session-ci-33db-job.log",
         "review_receipt": ".cache/launcher-polish-checks/ci-visual-33dbd58ad72e-14419208367/receipt.json"
+      },
+      {
+        "source_commit": "9efaf308bce3f6267689d6ba852b34401cf483ef",
+        "run_id": 44290561050,
+        "rust_job_id": 134754404950,
+        "strict_clippy_passed": true,
+        "workspace_cases_passed": 1247,
+        "controlled_protocol_cases_passed": 49,
+        "integration_Python_cases_passed": 919,
+        "site_integration_arch_passed": true,
+        "visual_cases": 944,
+        "visual_passed_cases": 932,
+        "artifact_id": 14423605392,
+        "archive_sha256": "0eaede7cbbf2bbd057798d77d71c0862e11655f8f89e34bcd456fb889c8b9044",
+        "all_case_pngs_present_and_crc_verified": true,
+        "corrected_session_tail_images_reviewed": 12,
+        "session_baselines_promoted": [
+          "session-lock-last-dark-1x",
+          "session-lock-last-dark-2x",
+          "session-greeter-last-dark-1x",
+          "session-greeter-last-dark-2x",
+          "session-authorization-last-dark-1x",
+          "session-authorization-last-dark-2x",
+          "session-lock-last-light-1x",
+          "session-lock-last-light-2x",
+          "session-greeter-last-light-1x",
+          "session-greeter-last-light-2x",
+          "session-authorization-last-light-1x",
+          "session-authorization-last-light-2x"
+        ],
+        "all_existing_baselines_passed": true,
+        "failure_scope": "Twelve missing session-tail baselines, now independently reviewed and accepted. A final full comparison remains required.",
+        "log": ".cache/launcher-polish-checks/consolidated-9efaf-rust.log",
+        "review_receipt": ".cache/launcher-polish-checks/ci-visual-9efaf308bce3-14423605392/receipt.json"
       }
     ]
   },

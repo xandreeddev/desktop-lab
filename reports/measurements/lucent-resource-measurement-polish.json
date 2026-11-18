@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-11-18",
-  "status": "source_prepared_hosted_checks_pending",
+  "status": "source_verified_native_measurements_pending",
   "scope": "Read-only resource collector admission and presentation identity policy. Owned Python fixtures only; no measured resource improvement, native cadence or performance acceptance.",
   "changes": [
     "Reject active/retiring/loading live previews, every pending/awaiting-first-frame background, static output refits and retained native replacements at admission, intermediate polls and final inspection.",
@@ -33,7 +33,7 @@
       "Fully mocked owned process: normal completion, failed exit, KeyboardInterrupt, terminate timeout, kill and reap."
     ],
     "independent_review_pending": false,
-    "hosted_integration_pending": true,
+    "hosted_integration_pending": false,
     "native_measurements_pending": true,
     "VM_or_SSH_operations_executed": false,
     "embedded_sampler_executed": false,
@@ -46,7 +46,14 @@
     "independent_reviews_passed": [
       "Typed identity, native generation filtering, duplicate consistency, bounds and report scope.",
       "Main admission ordering, owned-process cleanup, mocked external boundaries and report rejection."
-    ]
+    ],
+    "hosted_integration": {
+      "source_commit": "9efaf308bce3f6267689d6ba852b34401cf483ef",
+      "run_id": 44290561050,
+      "job_id": 134754404789,
+      "Python_cases_passed": 919,
+      "log": ".cache/launcher-polish-checks/consolidated-9efaf-integration.log"
+    }
   },
   "preserved_contracts": [
     "Existing running/installed executable, process, settings, output and producer generation/target checks remain required.",

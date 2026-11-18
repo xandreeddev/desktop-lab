@@ -53,7 +53,7 @@
     },
     {
       "id": "launcher",
-      "status": "source_verified_native_followup_pending",
+      "status": "hosted_behavior_and_visual_review_passed_baseline_rerun_pending",
       "behavior": "Search, keyboard selection, scrolling, section changes, launch/focus and dismissal form one consistent workflow.",
       "toolkit": "Controlled ListNavigation and list_window are pure public API contracts reused by the launcher/action lists and independent native picker; text editing retains its own keys and generation-bound clipboard state.",
       "acceptance": [
@@ -78,11 +78,20 @@
       "remaining": [
         "Resume VM resource use only after the user authorizes it; verify target dependencies, guarded apply and both public native helpers with actual visual review.",
         "Protected-main delivery with GitHub API writer access."
-      ]
+      ],
+      "consolidated_checkpoint": {
+        "source_commit": "9efaf308bce3f6267689d6ba852b34401cf483ef",
+        "run_id": 44290561050,
+        "workspace_cases_passed": 1247,
+        "controlled_protocol_cases_passed": 49,
+        "existing_visual_baselines_passed": 932,
+        "corrected_session_tail_baselines_reviewed_and_accepted": 12,
+        "final_full_visual_rerun_pending": true
+      }
     },
     {
       "id": "control-panels",
-      "status": "source_verified_native_followup_pending",
+      "status": "hosted_behavior_and_visual_review_passed_baseline_rerun_pending",
       "behavior": "Bar controls switch panels in one click, with consistent focus, dismissal, loading, unavailable, retry and confirmation behavior.",
       "toolkit": "Reusable panel/popover focus scopes, controls and menu behavior driven by real client requirements.",
       "acceptance": [
@@ -94,7 +103,16 @@
       "report": "reports/measurements/lucent-control-panel-polish.json",
       "completed_checks": [
         "Source27aaffc7d78b passes all four hosted jobs:1,144 workspace Rust cases,49 controlled service cases,832 Vulkan comparisons, integration/site and optimized Arch build. Artifact14411747369 archive digest and every case PNG CRC verified; three actual affected controls reviewed. VM acceptance remains deferred."
-      ]
+      ],
+      "consolidated_checkpoint": {
+        "source_commit": "9efaf308bce3f6267689d6ba852b34401cf483ef",
+        "run_id": 44290561050,
+        "workspace_cases_passed": 1247,
+        "controlled_protocol_cases_passed": 49,
+        "existing_visual_baselines_passed": 932,
+        "corrected_session_tail_baselines_reviewed_and_accepted": 12,
+        "final_full_visual_rerun_pending": true
+      }
     },
     {
       "id": "notifications",
@@ -108,11 +126,20 @@
         "The generic bounded viewport is exercised through an independent scroll-list consumer, including keyboard reveal and pointer activation.",
         "Review hosted production Vulkan output before accepting intentional notification changes and new narrow/short fixtures.",
         "Pass full hosted source/protocol/visual checks; actual VM interaction remains deferred under the current user instruction."
-      ]
+      ],
+      "consolidated_checkpoint": {
+        "source_commit": "9efaf308bce3f6267689d6ba852b34401cf483ef",
+        "run_id": 44290561050,
+        "workspace_cases_passed": 1247,
+        "controlled_protocol_cases_passed": 49,
+        "existing_visual_baselines_passed": 932,
+        "corrected_session_tail_baselines_reviewed_and_accepted": 12,
+        "final_full_visual_rerun_pending": true
+      }
     },
     {
       "id": "bar-dock-tray",
-      "status": "hosted_behavior_passed_visual_review_pending",
+      "status": "hosted_behavior_and_visual_review_passed_baseline_rerun_pending",
       "behavior": "Tray menus invoke only the displayed application and menu lifetime; dock gestures preserve newer pin preferences.",
       "toolkit": "Existing mapped input callbacks, clipped hit testing and controlled scrolling; menu identities and pin authority stay in clients.",
       "report": "reports/measurements/lucent-bar-dock-tray-polish.json",
@@ -121,11 +148,20 @@
         "Pending menu loads retire on observation or navigation changes; closed controls preserve independent bar operations.",
         "A pin change during a drag cancels the gesture, preserves the newly saved order and requires a fresh physical press.",
         "Pass hosted source/protocol/visual validation, retaining VM acceptance as deferred."
-      ]
+      ],
+      "consolidated_checkpoint": {
+        "source_commit": "9efaf308bce3f6267689d6ba852b34401cf483ef",
+        "run_id": 44290561050,
+        "workspace_cases_passed": 1247,
+        "controlled_protocol_cases_passed": 49,
+        "existing_visual_baselines_passed": 932,
+        "corrected_session_tail_baselines_reviewed_and_accepted": 12,
+        "final_full_visual_rerun_pending": true
+      }
     },
     {
       "id": "desktop-utilities",
-      "status": "hosted_behavior_passed_consolidated_visual_rerun_pending",
+      "status": "hosted_behavior_and_visual_review_passed_baseline_rerun_pending",
       "behavior": "Clipboard, emoji, command/menu and capture entry points feel integrated and preserve correct return-to-application behavior.",
       "toolkit": "Shared pickers, selection, clipboard transfers and any justified native popup/capture contracts.",
       "identified_work": [
@@ -137,7 +173,16 @@
       "completed_checks": [
         "834 Python tests pass, including32 new clipboard and utility cases; native focus/paste/capture acceptance remains deferred.",
         "Source a95e34232015 passes 1,200 hosted workspace cases, 49 controlled protocol cases, strict Clippy, integration/site and optimized Arch build. The visual step uses older baselines; the consolidated rerun remains pending. Native utility interactions stay deferred."
-      ]
+      ],
+      "consolidated_checkpoint": {
+        "source_commit": "9efaf308bce3f6267689d6ba852b34401cf483ef",
+        "run_id": 44290561050,
+        "workspace_cases_passed": 1247,
+        "controlled_protocol_cases_passed": 49,
+        "existing_visual_baselines_passed": 932,
+        "corrected_session_tail_baselines_reviewed_and_accepted": 12,
+        "final_full_visual_rerun_pending": true
+      }
     },
     {
       "id": "dashboard-and-media",
@@ -150,14 +195,23 @@
         "Represent system sampling loading, failure and recovery truthfully, retaining last-good data without presenting it as current.",
         "Make resized media content responsive and bound long title/artist metadata."
       ],
-      "active_slice": "Responsive Media passes strict Clippy, 1,247 workspace cases and all 49 controlled protocol cases at source30ed. All 24 new visual variants passed independent review and are accepted; prior dashboard/system baselines also pass in that run. Consolidated checks and native resize/playback acceptance remain separate.",
+      "active_slice": "All 24 responsive Media variants and all prior dashboard/system comparisons pass in the consolidated 9efaf run. Actual layout/input and all controlled protocol tests pass. Final full comparison and native resize/playback acceptance remain separate.",
       "report": "reports/measurements/lucent-dashboard-input-polish.json",
       "system_report": "reports/measurements/lucent-system-observation-polish.json",
-      "media_report": "reports/measurements/lucent-media-widget-polish.json"
+      "media_report": "reports/measurements/lucent-media-widget-polish.json",
+      "consolidated_checkpoint": {
+        "source_commit": "9efaf308bce3f6267689d6ba852b34401cf483ef",
+        "run_id": 44290561050,
+        "workspace_cases_passed": 1247,
+        "controlled_protocol_cases_passed": 49,
+        "existing_visual_baselines_passed": 932,
+        "corrected_session_tail_baselines_reviewed_and_accepted": 12,
+        "final_full_visual_rerun_pending": true
+      }
     },
     {
       "id": "appearance",
-      "status": "hosted_behavior_and_visual_review_passed_consolidated_rerun_pending",
+      "status": "hosted_behavior_and_visual_review_passed_baseline_rerun_pending",
       "behavior": "Palette and wallpaper browsing, previews, applying, cancellation and failures share consistent motion, spacing and density.",
       "toolkit": "Prepared assets, streaming textures, clipping, motion and cache ownership.",
       "identified_work": [
@@ -166,11 +220,20 @@
         "Bind online result selection and download callbacks to the rendered result and selection lifetime; reject retired form callbacks before root admission."
       ],
       "report": "reports/measurements/lucent-appearance-selection-polish.json",
-      "active_slice": "All affected wallpaper-error and live-monitor comparisons pass at source30ed in the 944-case run. Four reviewed error baselines are accepted, while the corrected monitor fixture preserves its original baselines. Full consolidated checks and native acceptance remain distinct."
+      "active_slice": "All affected wallpaper-error and live-monitor comparisons pass at source30ed in the 944-case run. Four reviewed error baselines are accepted, while the corrected monitor fixture preserves its original baselines. Full consolidated checks and native acceptance remain distinct.",
+      "consolidated_checkpoint": {
+        "source_commit": "9efaf308bce3f6267689d6ba852b34401cf483ef",
+        "run_id": 44290561050,
+        "workspace_cases_passed": 1247,
+        "controlled_protocol_cases_passed": 49,
+        "existing_visual_baselines_passed": 932,
+        "corrected_session_tail_baselines_reviewed_and_accepted": 12,
+        "final_full_visual_rerun_pending": true
+      }
     },
     {
       "id": "outputs-and-session",
-      "status": "hosted_behavior_passed_partial_visual_approval_pending",
+      "status": "hosted_behavior_and_visual_review_passed_baseline_rerun_pending",
       "behavior": "Display changes, per-output layouts, scaling and secure session transitions preserve usable controls and user state.",
       "toolkit": "Output/native lifetime contracts, density, input routing and secure role boundaries.",
       "identified_work": [
@@ -178,13 +241,22 @@
         "Preserve pending display apply cancellation across close then reopen before admission returns.",
         "Verify authentication control reachability on short outputs and long prompts before presentation-only changes; preserve all secure authority."
       ],
-      "active_slice": "Shared session cards pass hosted behavior, with bounded public scrolling and reachable fixed controls. Of 56 reviewed session images, 44 are accepted. Twelve tail fixtures now preserve the real keyboard scroll focus and await hosted rendering; native secure-session and output workflows remain deferred.",
+      "active_slice": "All 56 session variants have passed independent review, including twelve corrected end-of-scroll images from source9efaf. Their baselines are accepted. Final full comparison and native secure-session/output workflows remain pending.",
       "report": "reports/measurements/lucent-display-confirmation-polish.json",
-      "session_report": "reports/measurements/lucent-session-presentation-polish.json"
+      "session_report": "reports/measurements/lucent-session-presentation-polish.json",
+      "consolidated_checkpoint": {
+        "source_commit": "9efaf308bce3f6267689d6ba852b34401cf483ef",
+        "run_id": 44290561050,
+        "workspace_cases_passed": 1247,
+        "controlled_protocol_cases_passed": 49,
+        "existing_visual_baselines_passed": 932,
+        "corrected_session_tail_baselines_reviewed_and_accepted": 12,
+        "final_full_visual_rerun_pending": true
+      }
     },
     {
       "id": "resources-and-motion",
-      "status": "source_prepared_hosted_checks_pending",
+      "status": "source_verified_native_measurements_pending",
       "behavior": "Verify cold/warm interaction cost and presentation, including resize/return-to-FHD memory, against the existing resource targets.",
       "toolkit": "Measured renderer/resource ownership and compositor pacing; keep resource checks part of each preceding feature as well.",
       "identified_work": [
@@ -192,7 +264,7 @@
         "Bind presentation collection and submission maps to bounded canonical typed surface addresses and admitted native generations; reject conflicting duplicate samples and preserve explicit legacy/null-generation resource-only scope."
       ],
       "native_acceptance": "Eligible RSS, cold/warm/resize resource targets and actual presentation pacing remain deferred under the VM and memory hold. Source audit did not demonstrate a production resource leak.",
-      "active_slice": "Schema 2 collector passes 29 owned Python fixtures, both independent source reviews, 27 architecture cases and the full 919-case lightweight Python suite. Mocked pre-spawn admission, every-poll/final validation and owned sampler cleanup pass. Hosted integration remains pending; no native measurement was executed.",
+      "active_slice": "Schema 2 collector source and independent reviews pass; all 29 resource fixtures are included in the 919-case hosted Python pass at9efaf. No native resource or pacing measurement was executed.",
       "report": "reports/measurements/lucent-resource-measurement-polish.json"
     }
   ],

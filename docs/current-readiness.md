@@ -23,17 +23,17 @@ separates implemented behavior, source-specific test evidence and open acceptanc
 | Responsive Media widget | Artwork, metadata and controls respond to card size with bounded labels, preserved player authority and frozen native input geometry during resize. |
 | Resource collection | Idle admission includes previews, background transitions, refits and native retirement; typed address/generation checks prevent retained historical feedback from becoming current pacing evidence. No performance improvement is claimed. |
 
-The latest hosted application checkpoint,
-[`30ed89acb7d3`](https://github.com/xandreeddev/desktop-lab/actions/runs/44286964583),
+The consolidated hosted checkpoint,
+[`9efaf308bce3`](https://github.com/xandreeddev/desktop-lab/actions/runs/44290561050),
 passes **1,247 workspace Rust tests, all 49 controlled service cases and strict
-Clippy**. Its production Vulkan comparison ran 944 cases: 864 passed and 80
-required review or fixture updates, comprising 56 session and 24 new Media
-images. The visual job failed and is not recorded as a full pass. Forty-four
-session images from the earlier `33dbd58ad72e` run were reviewed and accepted;
-the 12 tail-position fixtures were corrected to retain actual keyboard focus
-and still require fresh hosted rendering. All 24 Media variants have now passed
-independent visual review and are accepted. The consolidated visual rerun remains
-pending.
+Clippy**, plus site, integration and the optimized Arch development build. The
+production Vulkan comparison ran 944 cases: all 932 existing baselines passed,
+and only twelve corrected session-tail baselines were missing. All twelve fresh
+images have now passed independent review and are accepted; final instructions,
+scroll focus and fixed actions are visible in each theme/density. This closes the
+review of all 56 session and 24 new Media variants. The original failed visual
+run remains recorded. A final full comparison with the accepted baselines is
+still required.
 
 The current component catalogue was independently received from `30ed89acb7d3`:
 122 producer inputs, nine stories and 480 captures. Its archive digest, current
