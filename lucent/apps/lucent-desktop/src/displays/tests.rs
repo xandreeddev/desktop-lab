@@ -1,7 +1,13 @@
 use super::*;
 use std::sync::Mutex;
+#[derive(Debug, PartialEq, Eq)]
+enum Call {
+    Apply(DisplayTransactionId),
+    Keep(DisplayTransactionId),
+    Revert(DisplayTransactionId),
+}
 #[derive(Default)]
-struct Adapter(Mutex<Vec<&'static str>>);
+struct Adapter(Mutex<Vec<Call>>);
 impl DisplayPort for Adapter {
     fn read(&self) -> Result<DisplaySnapshot> {
         Ok(fixture())
@@ -12,15 +18,22 @@ impl DisplayPort for Adapter {
         _: Vec<DisplayConfiguration>,
         _: Vec<DisplayConfiguration>,
     ) -> Result<DisplayTransactionId> {
-        self.0.lock().unwrap().push("apply");
-        DisplayTransactionId::new(7)
+        let mut calls = self.0.lock().unwrap();
+        let id = DisplayTransactionId::new(
+            7 + calls
+                .iter()
+                .filter(|call| matches!(call, Call::Apply(_)))
+                .count() as u64,
+        )?;
+        calls.push(Call::Apply(id));
+        Ok(id)
     }
-    fn keep(&self, _: DisplayTransactionId) -> Result<()> {
-        self.0.lock().unwrap().push("keep");
+    fn keep(&self, id: DisplayTransactionId) -> Result<()> {
+        self.0.lock().unwrap().push(Call::Keep(id));
         Ok(())
     }
-    fn revert(&self, _: DisplayTransactionId) -> Result<()> {
-        self.0.lock().unwrap().push("revert");
+    fn revert(&self, id: DisplayTransactionId) -> Result<()> {
+        self.0.lock().unwrap().push(Call::Revert(id));
         Ok(())
     }
 }
@@ -53,6 +66,414 @@ fn open(child: &mut Displays, effects: &mut Effects<Message>) {
         let task = effects.tasks.remove(0);
         child.update(task.run(), effects);
     }
+}
+fn transaction(value: u64) -> DisplayTransactionId {
+    DisplayTransactionId::new(value).unwrap()
+}
+fn observe_transaction(child: &mut Displays, id: u64, phase: DisplayTransactionPhase) {
+    let mut snapshot = fixture();
+    snapshot.revision = child.snapshot.as_ref().map_or(1, |s| s.revision + 1);
+    snapshot.transaction = Some(DisplayTransaction {
+        id: transaction(id),
+        phase,
+    });
+    child.update(Message::Observed(Ok(snapshot)), &mut Effects::default());
+}
+fn awaiting(seconds: u32) -> DisplayTransactionPhase {
+    DisplayTransactionPhase::AwaitingConfirmation {
+        remaining_seconds: seconds,
+    }
+}
+fn confirmation_click(child: &Displays, id: &str) -> Message {
+    fn find(element: &Element<Message>, id: &str) -> Option<Message> {
+        if element.id == id {
+            element.click.clone()
+        } else {
+            element.children.iter().find_map(|child| find(child, id))
+        }
+    }
+    let theme = lucent_design::Theme::from_palette(&lucent_design::palettes()[0]);
+    find(
+        &child.view(
+            &ViewContext {
+                surface: "displays",
+                instance: None,
+                width: 640.,
+                height: 720.,
+                now: 1.,
+                density: Density::ONE,
+            },
+            theme,
+        ),
+        id,
+    )
+    .expect("rendered confirmation action")
+}
+fn begin_apply(child: &mut Displays, effects: &mut Effects<Message>) {
+    child.update(
+        Message::Mode(
+            MonitorId::new("DP-1").unwrap(),
+            DisplayMode::new(1280, 720, 60000).unwrap(),
+        ),
+        effects,
+    );
+    child.update(Message::Apply, effects);
+    assert_eq!(effects.tasks.len(), 1);
+}
+
+#[test]
+fn rendered_confirmations_cannot_keep_or_revert_a_replacement_transaction() {
+    for terminal in [
+        DisplayTransactionPhase::Kept,
+        DisplayTransactionPhase::Reverted {
+            reason: "Timed out".into(),
+        },
+        DisplayTransactionPhase::Failed {
+            reason: "Preview failed".into(),
+        },
+    ] {
+        for (control, keep) in [("display-keep", true), ("display-revert", false)] {
+            let adapter = Arc::new(Adapter::default());
+            let mut child = Displays::new(adapter.clone());
+            let mut effects = Effects::default();
+            open(&mut child, &mut effects);
+            observe_transaction(&mut child, 7, awaiting(12));
+            let retired = confirmation_click(&child, control);
+            observe_transaction(&mut child, 7, terminal.clone());
+            observe_transaction(&mut child, 8, awaiting(12));
+            let current = confirmation_click(&child, control);
+            // A watched confirmation is authoritative even without a locally
+            // initiated Apply, as in the existing native visual fixture.
+            assert!(child.transaction.is_none());
+            let before = child.snapshot.clone();
+            child.update(retired, &mut effects);
+            assert!(effects.tasks.is_empty());
+            assert!(adapter.0.lock().unwrap().is_empty());
+            assert_eq!(child.snapshot, before);
+            child.update(current.clone(), &mut effects);
+            child.update(current, &mut effects);
+            assert_eq!(
+                effects.tasks.len(),
+                1,
+                "busy callbacks cannot duplicate work"
+            );
+            let task = effects.tasks.pop().unwrap();
+            assert_eq!(task.queue, crate::work::CONTROLS);
+            child.update(task.run(), &mut effects);
+            assert_eq!(
+                *adapter.0.lock().unwrap(),
+                [if keep {
+                    Call::Keep(transaction(8))
+                } else {
+                    Call::Revert(transaction(8))
+                }]
+            );
+            assert_eq!(
+                child.snapshot, before,
+                "acknowledgement does not invent native state"
+            );
+            assert!(child.pending());
+        }
+    }
+}
+
+#[test]
+fn reopening_and_rollback_acknowledgement_cannot_revive_a_cancelled_confirmation() {
+    for control in ["display-keep", "display-revert"] {
+        let adapter = Arc::new(Adapter::default());
+        let mut child = Displays::new(adapter.clone());
+        let mut effects = Effects::default();
+        open(&mut child, &mut effects);
+        observe_transaction(&mut child, 7, awaiting(12));
+        let old_generation = child.close_generation;
+        let old_click = confirmation_click(&child, control);
+        child.update(Message::Close, &mut effects);
+        let rollback = effects.tasks.pop().unwrap();
+        child.update(Message::Open, &mut effects);
+        assert_ne!(child.close_generation, old_generation);
+        child.update(old_click.clone(), &mut effects);
+        assert!(effects.tasks.is_empty());
+        child.update(rollback.run(), &mut effects);
+        assert!(child.active.is_none());
+        assert_eq!(child.retired_confirmation, Some(transaction(7)));
+        // Even a newer countdown can still precede rollback's terminal watch.
+        observe_transaction(&mut child, 7, awaiting(8));
+        child.update(old_click, &mut effects);
+        let new_click = confirmation_click(&child, control);
+        assert!(matches!(new_click, Message::Ignore));
+        child.update(new_click, &mut effects);
+        child.update(
+            Message::Keep(child.close_generation, transaction(7)),
+            &mut effects,
+        );
+        child.update(
+            Message::Revert(child.close_generation, transaction(7)),
+            &mut effects,
+        );
+        assert!(effects.tasks.is_empty());
+        assert_eq!(*adapter.0.lock().unwrap(), [Call::Revert(transaction(7))]);
+        observe_transaction(
+            &mut child,
+            7,
+            DisplayTransactionPhase::Reverted {
+                reason: "Closed".into(),
+            },
+        );
+        assert!(child.retired_confirmation.is_none());
+        observe_transaction(&mut child, 8, awaiting(12));
+        let fresh = confirmation_click(&child, control);
+        child.update(fresh, &mut effects);
+        assert_eq!(
+            effects.tasks.len(),
+            1,
+            "a different preview still admits current input"
+        );
+    }
+}
+
+#[test]
+fn explicit_revert_retires_confirmation_until_terminal_observation() {
+    let adapter = Arc::new(Adapter::default());
+    let mut child = Displays::new(adapter.clone());
+    let mut effects = Effects::default();
+    open(&mut child, &mut effects);
+    observe_transaction(&mut child, 7, awaiting(12));
+    let keep = confirmation_click(&child, "display-keep");
+    let revert = confirmation_click(&child, "display-revert");
+    child.update(revert.clone(), &mut effects);
+    let task = effects.tasks.pop().unwrap();
+    child.update(task.run(), &mut effects);
+    child.update(keep, &mut effects);
+    child.update(revert, &mut effects);
+    assert!(effects.tasks.is_empty());
+    assert!(matches!(
+        confirmation_click(&child, "display-keep"),
+        Message::Ignore
+    ));
+    assert_eq!(*adapter.0.lock().unwrap(), [Call::Revert(transaction(7))]);
+}
+
+#[test]
+fn confirmation_callbacks_capture_the_panel_lifetime_as_well_as_transaction() {
+    let mut child = Displays::new(Arc::new(Adapter::default()));
+    let mut effects = Effects::default();
+    open(&mut child, &mut effects);
+    observe_transaction(&mut child, 7, awaiting(12));
+    let generation = child.close_generation;
+    assert!(matches!(
+        confirmation_click(&child, "display-keep"),
+        Message::Keep(captured, id) if captured == generation && id == transaction(7)
+    ));
+    assert!(matches!(
+        confirmation_click(&child, "display-revert"),
+        Message::Revert(captured, id) if captured == generation && id == transaction(7)
+    ));
+    for stale in [
+        Message::Keep(generation.wrapping_sub(1), transaction(7)),
+        Message::Revert(generation.wrapping_sub(1), transaction(7)),
+    ] {
+        child.update(stale, &mut effects);
+        assert!(effects.tasks.is_empty());
+    }
+}
+
+#[test]
+fn countdown_updates_preserve_the_same_transaction_callback() {
+    for (control, keep) in [("display-keep", true), ("display-revert", false)] {
+        let adapter = Arc::new(Adapter::default());
+        let mut child = Displays::new(adapter.clone());
+        let mut effects = Effects::default();
+        open(&mut child, &mut effects);
+        observe_transaction(&mut child, 7, awaiting(12));
+        let click = confirmation_click(&child, control);
+        observe_transaction(&mut child, 7, awaiting(8));
+        child.update(click, &mut effects);
+        assert_eq!(effects.tasks.len(), 1);
+        child.update(effects.tasks.pop().unwrap().run(), &mut Effects::default());
+        assert_eq!(
+            *adapter.0.lock().unwrap(),
+            [if keep {
+                Call::Keep(transaction(7))
+            } else {
+                Call::Revert(transaction(7))
+            }]
+        );
+    }
+}
+
+#[test]
+fn confirmation_requires_an_open_idle_current_confirmation_phase() {
+    for control in ["display-keep", "display-revert"] {
+        for state in [
+            "closed",
+            "preparing",
+            "kept",
+            "reverted",
+            "failed",
+            "missing",
+            "refreshing",
+            "active",
+        ] {
+            let adapter = Arc::new(Adapter::default());
+            let mut child = Displays::new(adapter.clone());
+            let mut effects = Effects::default();
+            open(&mut child, &mut effects);
+            observe_transaction(&mut child, 7, awaiting(12));
+            let click = confirmation_click(&child, control);
+            match state {
+                "closed" => child.set_open(false, 1.),
+                "preparing" => {
+                    observe_transaction(&mut child, 7, DisplayTransactionPhase::Preparing)
+                }
+                "kept" => observe_transaction(&mut child, 7, DisplayTransactionPhase::Kept),
+                "reverted" => observe_transaction(
+                    &mut child,
+                    7,
+                    DisplayTransactionPhase::Reverted {
+                        reason: "Timed out".into(),
+                    },
+                ),
+                "failed" => observe_transaction(
+                    &mut child,
+                    7,
+                    DisplayTransactionPhase::Failed {
+                        reason: "Failed".into(),
+                    },
+                ),
+                "missing" => child.snapshot.as_mut().unwrap().transaction = None,
+                "refreshing" => child.refreshing = Some((child.revision, false)),
+                "active" => child.active = Some(child.revision),
+                _ => unreachable!(),
+            }
+            child.update(click, &mut effects);
+            assert!(effects.tasks.is_empty(), "{control} acted while {state}");
+            assert!(adapter.0.lock().unwrap().is_empty());
+        }
+    }
+}
+
+#[test]
+fn close_rolls_back_a_watched_preparation_without_ui_confirmation_authority() {
+    let adapter = Arc::new(Adapter::default());
+    let mut child = Displays::new(adapter.clone());
+    let mut effects = Effects::default();
+    open(&mut child, &mut effects);
+    observe_transaction(&mut child, 9, DisplayTransactionPhase::Preparing);
+    assert!(child.transaction.is_none());
+    child.update(Message::Close, &mut effects);
+    assert!(!child.open());
+    assert_eq!(effects.tasks.len(), 1);
+    child.update(effects.tasks.pop().unwrap().run(), &mut Effects::default());
+    assert_eq!(*adapter.0.lock().unwrap(), [Call::Revert(transaction(9))]);
+}
+
+#[test]
+fn reopening_cannot_restore_authority_to_an_apply_retired_by_close() {
+    for close in [Message::Close, Message::Toggle] {
+        let adapter = Arc::new(Adapter::default());
+        let mut child = Displays::new(adapter.clone());
+        let mut effects = Effects::default();
+        open(&mut child, &mut effects);
+        begin_apply(&mut child, &mut effects);
+        let apply = effects.tasks.pop().unwrap();
+        child.update(close, &mut effects);
+        assert!(!child.open());
+        child.update(Message::Open, &mut effects);
+        assert!(child.open() && child.pending());
+        assert!(effects.tasks.is_empty());
+        child.update(apply.run(), &mut effects);
+        assert_eq!(
+            effects.tasks.len(),
+            1,
+            "retired admission must roll back even after reopening"
+        );
+        let rollback = effects.tasks.pop().unwrap();
+        child.update(rollback.run(), &mut effects);
+        assert_eq!(
+            *adapter.0.lock().unwrap(),
+            [Call::Apply(transaction(7)), Call::Revert(transaction(7))]
+        );
+        observe_transaction(
+            &mut child,
+            7,
+            DisplayTransactionPhase::Reverted {
+                reason: "Panel closed".into(),
+            },
+        );
+        assert!(child.open() && !child.pending());
+        begin_apply(&mut child, &mut effects);
+        child.update(effects.tasks.pop().unwrap().run(), &mut Effects::default());
+        assert_eq!(
+            child.transaction,
+            Some(transaction(8)),
+            "a fresh Apply after rollback remains usable"
+        );
+        assert_eq!(
+            *adapter.0.lock().unwrap(),
+            [
+                Call::Apply(transaction(7)),
+                Call::Revert(transaction(7)),
+                Call::Apply(transaction(8))
+            ]
+        );
+    }
+}
+
+#[test]
+fn rejected_retired_admission_does_not_stick_busy_or_start_rollback() {
+    let adapter = Arc::new(Adapter::default());
+    let mut child = Displays::new(adapter.clone());
+    let mut effects = Effects::default();
+    open(&mut child, &mut effects);
+    begin_apply(&mut child, &mut effects);
+    let revision = child.active.unwrap();
+    effects.tasks.clear();
+    child.update(Message::Close, &mut effects);
+    child.update(Message::Open, &mut effects);
+    child.update(
+        Message::Admitted(revision, Err(DomainError::Failed("Apply refused".into()))),
+        &mut effects,
+    );
+    assert!(child.open() && !child.pending());
+    assert!(child.error.contains("Apply refused"));
+    assert!(effects.tasks.is_empty());
+    assert!(adapter.0.lock().unwrap().is_empty());
+}
+
+#[test]
+fn stale_successful_admission_rolls_back_its_id_without_retiring_a_new_apply() {
+    let adapter = Arc::new(Adapter::default());
+    let mut child = Displays::new(adapter.clone());
+    let mut effects = Effects::default();
+    open(&mut child, &mut effects);
+    begin_apply(&mut child, &mut effects);
+    let old = effects.tasks.pop().unwrap().run();
+    child.update(old.clone(), &mut effects);
+    observe_transaction(
+        &mut child,
+        7,
+        DisplayTransactionPhase::Reverted {
+            reason: "Retired".into(),
+        },
+    );
+    begin_apply(&mut child, &mut effects);
+    let current = effects.tasks.pop().unwrap();
+    let active = child.active;
+    child.update(old, &mut effects);
+    assert_eq!(child.active, active);
+    let rollback = effects.tasks.pop().unwrap();
+    child.update(rollback.run(), &mut effects);
+    assert_eq!(child.active, active);
+    child.update(current.run(), &mut effects);
+    assert_eq!(child.transaction, Some(transaction(8)));
+    assert_eq!(
+        *adapter.0.lock().unwrap(),
+        [
+            Call::Apply(transaction(7)),
+            Call::Revert(transaction(7)),
+            Call::Apply(transaction(8))
+        ]
+    );
 }
 #[test]
 fn reset_reads_current_native_state_without_a_watch_event() {
@@ -170,7 +591,7 @@ fn draft_changes_do_not_apply_until_explicit_action() {
         child.transaction,
         Some(DisplayTransactionId::new(7).unwrap())
     );
-    assert_eq!(*adapter.0.lock().unwrap(), ["apply"]);
+    assert_eq!(*adapter.0.lock().unwrap(), [Call::Apply(transaction(7))]);
     assert!(child.snapshot.as_ref().unwrap().transaction.is_none());
 }
 #[test]
@@ -195,7 +616,10 @@ fn close_before_admission_reverts_the_exact_late_transaction() {
         let task = effects.tasks.remove(0);
         child.update(task.run(), &mut effects);
     }
-    assert_eq!(*adapter.0.lock().unwrap(), ["apply", "revert"]);
+    assert_eq!(
+        *adapter.0.lock().unwrap(),
+        [Call::Apply(transaction(7)), Call::Revert(transaction(7))]
+    );
     assert!(!child.open());
 }
 #[test]
@@ -271,5 +695,8 @@ fn admitted_preview_remains_pending_until_watch_or_explicit_close() {
     child.update(Message::Close, &mut effects);
     let revert = effects.tasks.remove(0);
     child.update(revert.run(), &mut effects);
-    assert_eq!(*adapter.0.lock().unwrap(), ["apply", "revert"]);
+    assert_eq!(
+        *adapter.0.lock().unwrap(),
+        [Call::Apply(transaction(7)), Call::Revert(transaction(7))]
+    );
 }

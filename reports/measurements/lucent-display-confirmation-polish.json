@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-18",
+  "status": "implementation_ready_for_hosted_checks",
+  "scope": "Display confirmation and cancellation lifetimes, using the existing native transaction guardian.",
+  "changes": [
+    "Keep and Revert callbacks retain the rendered transaction and panel lifetime instead of resolving the latest transaction at delivery.",
+    "Countdown updates preserve current confirmation controls; replaced, closed, busy or retired confirmations cannot dispatch.",
+    "Closing an Apply retires its admission even if the panel reopens before its result arrives.",
+    "Internal rollback retains exact transaction identity and remains valid before the confirmation snapshot."
+  ],
+  "validation": {
+    "rust_execution_pending": true,
+    "hosted_visuals_pending": true,
+    "native_vm_pending": true,
+    "coverage": [
+      "Captured confirmation callbacks across replacement, terminal phases, countdown and panel lifetime.",
+      "Close/Toggle then reopen before Apply completion, rejected admission and stale success during a new request.",
+      "Root panel dismissal with known and late admissions, including reopening before completion."
+    ],
+    "architecture_cases_passed": 26,
+    "formatting_passed": true,
+    "diff_check_passed": true
+  },
+  "vm_started": false,
+  "native_accepted": false,
+  "full_polish_goal_complete": false
+}

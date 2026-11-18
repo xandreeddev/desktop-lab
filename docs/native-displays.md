@@ -98,7 +98,12 @@ all outputs manually while debugging.
   scheduling `DisplayPort::read`; `Refreshed` accepts only the still-open current
   request and never replaces a newer observation with an older revision.
   Closing retires the request; a Reset delivered after close performs no read.
-  A late transaction admission after close is reverted using its exact identity.
+  A late transaction admission after close is reverted using its exact identity,
+  including when the panel has reopened before admission returns. Confirmation
+  callbacks retain the rendered transaction and panel lifetime; a callback for
+  an earlier preview cannot keep or revert its replacement. Closing retires
+  confirmation authority until the native observation settles the rollback.
+  Countdown observations for the same live confirmation preserve its controls.
 - **Framework:** the existing component, effects, subscription, relative text
   editing, surface and renderer APIs are reused. No display policy is added to
   the generic UI engine.

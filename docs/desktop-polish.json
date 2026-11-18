@@ -109,7 +109,7 @@
     },
     {
       "id": "bar-dock-tray",
-      "status": "in_progress",
+      "status": "implementation_ready_for_hosted_checks",
       "behavior": "Tray menus invoke only the displayed application and menu lifetime; dock gestures preserve newer pin preferences.",
       "toolkit": "Existing mapped input callbacks, clipped hit testing and controlled scrolling; menu identities and pin authority stay in clients.",
       "report": "reports/measurements/lucent-bar-dock-tray-polish.json",
@@ -155,14 +155,16 @@
     },
     {
       "id": "outputs-and-session",
-      "status": "queued",
+      "status": "in_progress",
       "behavior": "Display changes, per-output layouts, scaling and secure session transitions preserve usable controls and user state.",
       "toolkit": "Output/native lifetime contracts, density, input routing and secure role boundaries.",
       "identified_work": [
         "Bind Keep/Revert callbacks to the rendered display transaction and current confirmation phase.",
         "Preserve pending display apply cancellation across close then reopen before admission returns.",
         "Verify authentication control reachability on short outputs and long prompts before presentation-only changes; preserve all secure authority."
-      ]
+      ],
+      "active_slice": "Display confirmation identity and cancellation lifetime; broader output/session presentation remains queued.",
+      "report": "reports/measurements/lucent-display-confirmation-polish.json"
     },
     {
       "id": "resources-and-motion",

@@ -172,7 +172,7 @@ fn finish_tasks(app: &mut Desktop, effects: &mut Effects<Message>) {
 }
 #[test]
 fn shell_hide_rolls_back_known_and_late_display_admissions() {
-    for late in [false, true] {
+    for (late, reopen) in [(false, false), (false, true), (true, false), (true, true)] {
         let (mut app, adapter) = with_dismiss_adapters();
         let mut effects = Effects::default();
         app.update(open(Panel::Displays), &mut effects);
@@ -194,11 +194,14 @@ fn shell_hide_rolls_back_known_and_late_display_admissions() {
             app.update(task.take().unwrap().run(), &mut effects);
         }
         app.update(Message::DismissPanels, &mut effects);
+        if reopen {
+            app.update(open(Panel::Displays), &mut effects);
+        }
         if late {
             app.update(task.take().unwrap().run(), &mut effects);
         }
         finish_tasks(&mut app, &mut effects);
-        assert!(!app.displays.open());
+        assert_eq!(app.displays.open(), reopen);
         assert_eq!(
             *adapter.reverts.lock().unwrap(),
             [DisplayTransactionId::new(7).unwrap()]

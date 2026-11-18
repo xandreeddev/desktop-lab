@@ -19,8 +19,8 @@ pub enum Message {
     Rotate(MonitorId),
     Edit(u64, MonitorId, usize, TextEdit),
     Apply,
-    Keep,
-    Revert,
+    Keep(u64, DisplayTransactionId),
+    Revert(u64, DisplayTransactionId),
     Admitted(u64, Result<DisplayTransactionId>),
     Completed(u64, Result<()>),
     Scroll(ScrollEvent),
@@ -56,6 +56,9 @@ pub struct Displays {
     close_generation: u64,
     revision: u64,
     active: Option<u64>,
+    // Reopening cannot revive an Apply retired before its admission arrived.
+    apply_close_generation: u64,
+    retired_confirmation: Option<DisplayTransactionId>,
     refreshing: Option<(u64, bool)>,
     transaction: Option<DisplayTransactionId>,
     scroll: f32,
@@ -77,6 +80,8 @@ impl Displays {
             close_generation: 0,
             revision: 0,
             active: None,
+            apply_close_generation: 0,
+            retired_confirmation: None,
             refreshing: None,
             transaction: None,
             scroll: 0.,
@@ -142,6 +147,11 @@ impl Displays {
         {
             return;
         }
+        if snapshot.transaction.as_ref().is_some_and(|transaction| {
+            self.retired_confirmation == Some(transaction.id) && !transaction.phase.pending()
+        }) {
+            self.retired_confirmation = None;
+        }
         self.snapshot = Some(snapshot);
         self.observation_error.clear();
     }
@@ -191,7 +201,25 @@ impl Displays {
             })
             .collect()
     }
-    fn command(&mut self, keep: bool, effects: &mut Effects<Message>) {
+    fn confirmation_active(&self, generation: u64, id: DisplayTransactionId) -> bool {
+        self.open
+            && generation == self.close_generation
+            && self.retired_confirmation != Some(id)
+            && self.active.is_none()
+            && self.refreshing.is_none()
+            && self.snapshot.as_ref().is_some_and(|snapshot| {
+                snapshot.transaction.as_ref().is_some_and(|transaction| {
+                    transaction.id == id
+                        && matches!(
+                            transaction.phase,
+                            DisplayTransactionPhase::AwaitingConfirmation { .. }
+                        )
+                })
+            })
+    }
+    // Closing must also roll back a known preview before its confirmation is
+    // visible. This internal path does not borrow authority from a UI callback.
+    fn rollback(&mut self, effects: &mut Effects<Message>) {
         let Some(id) = self
             .snapshot
             .as_ref()
@@ -202,6 +230,14 @@ impl Displays {
         else {
             return;
         };
+        self.command(id, false, effects);
+    }
+    fn command(&mut self, id: DisplayTransactionId, keep: bool, effects: &mut Effects<Message>) {
+        if !keep {
+            // Admission only queues rollback. A stale watched confirmation
+            // must stay retired until its native terminal state arrives.
+            self.retired_confirmation = Some(id);
+        }
         self.revision = self.revision.wrapping_add(1);
         let revision = self.revision;
         self.active = Some(revision);
@@ -242,8 +278,7 @@ impl Displays {
                         && self.transaction.is_some_and(|id| {
                             snapshot.transaction.as_ref().is_some_and(|t| t.id == id)
                         });
-                    self.snapshot = Some(snapshot);
-                    self.observation_error.clear();
+                    self.accept(snapshot);
                     if terminal {
                         self.transaction = None;
                         self.active = None;
@@ -265,7 +300,7 @@ impl Displays {
             Message::Toggle => {
                 if self.open {
                     if self.pending() {
-                        self.command(false, effects);
+                        self.rollback(effects);
                     }
                     self.set_open(false, effects.now);
                 } else {
@@ -275,7 +310,7 @@ impl Displays {
             }
             Message::Close => {
                 if self.pending() {
-                    self.command(false, effects);
+                    self.rollback(effects);
                 }
                 self.set_open(false, effects.now);
             }
@@ -386,6 +421,7 @@ impl Displays {
                             self.revision = self.revision.wrapping_add(1);
                             let revision = self.revision;
                             self.active = Some(revision);
+                            self.apply_close_generation = self.close_generation;
                             let adapter = self.adapter.clone();
                             let baseline = self.baseline.clone();
                             self.error.clear();
@@ -403,19 +439,26 @@ impl Displays {
                     }
                 }
             }
-            Message::Keep => {
-                if self.open && self.active.is_none() {
-                    self.command(true, effects);
+            Message::Keep(generation, id) => {
+                if self.confirmation_active(generation, id) {
+                    self.command(id, true, effects);
                 }
             }
-            Message::Revert => {
-                if self.active.is_none() {
-                    self.command(false, effects);
+            Message::Revert(generation, id) => {
+                if self.confirmation_active(generation, id) {
+                    self.command(id, false, effects);
                 }
             }
             Message::Admitted(revision, result) => {
                 if self.active != Some(revision) {
                     if let Ok(id) = result {
+                        if self.transaction == Some(id)
+                            || self.snapshot.as_ref().is_some_and(|snapshot| {
+                                snapshot.transaction.as_ref().is_some_and(|t| t.id == id)
+                            })
+                        {
+                            self.retired_confirmation = Some(id);
+                        }
                         let adapter = self.adapter.clone();
                         effects.task_on(crate::work::CONTROLS, move || {
                             Message::Completed(revision, adapter.revert(id))
@@ -436,8 +479,8 @@ impl Displays {
                             self.reset();
                         } else {
                             self.transaction = Some(id);
-                            if !self.open {
-                                self.command(false, effects);
+                            if !self.open || self.apply_close_generation != self.close_generation {
+                                self.command(id, false, effects);
                             }
                         }
                     }

@@ -185,15 +185,15 @@ impl Displays {
                         button(
                             "Revert",
                             "display-revert",
-                            Message::Revert,
-                            self.active.is_none(),
+                            Message::Revert(self.close_generation, transaction.id),
+                            self.confirmation_active(self.close_generation, transaction.id),
                             theme,
                         ),
                         button(
                             "Keep",
                             "display-keep",
-                            Message::Keep,
-                            self.active.is_none(),
+                            Message::Keep(self.close_generation, transaction.id),
+                            self.confirmation_active(self.close_generation, transaction.id),
                             theme,
                         ),
                     ])
