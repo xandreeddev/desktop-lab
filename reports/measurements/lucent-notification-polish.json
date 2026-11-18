@@ -17,7 +17,7 @@
     "diff_check_passed": true,
     "rust_execution_pending": true,
     "hosted_visuals_pending": true,
-    "catalogue_refresh_pending": true,
+    "catalogue_refresh_pending": false,
     "native_vm_pending": true,
     "coverage": [
       "Actual toast layout and End navigation at short sizes, multiline metadata and exact action dispatch; short toasts retain natural height.",
@@ -27,7 +27,23 @@
       "Four new visual fixture families for short plain toasts and long toast/history metadata at both palettes and densities."
     ],
     "architecture_cases_passed": 26,
-    "design_token_guard_cases_passed": 4
+    "design_token_guard_cases_passed": 4,
+    "catalogue": {
+      "source_commit": "a6362fd653f42ea353bd918cb390233af82b9a8b",
+      "run_id": 44267955556,
+      "job_id": 134677077870,
+      "artifact_id": 14412010023,
+      "archive_sha256": "2c211f96a7edeea7a6958fdfb7c45f71e75b53f1210966731b978f6270174561",
+      "inputs": 122,
+      "captures": 480,
+      "stories": 9,
+      "byte_identical_to_previously_reviewed_captures": 480,
+      "reviewed_current_samples": [
+        "scroll-dark-bottom-narrow-1x",
+        "menu-light-populated-narrow-1x"
+      ],
+      "promoted": true
+    }
   },
   "vm_started": false,
   "native_accepted": false,
