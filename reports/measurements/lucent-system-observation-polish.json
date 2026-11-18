@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-11-18",
-  "status": "implementation_ready_for_hosted_checks",
+  "status": "hosted_behavior_and_visual_review_passed_baseline_rerun_pending",
   "scope": "Bounded system sampling and truthful loading, stale and recovered widget presentation.",
   "changes": [
     "CPU intervals distinguish unknown from measured idle and reset after failed or regressing observations.",
@@ -10,7 +10,7 @@
     "The widget uses existing design tokens and placeholders or muted last-reading labels without sampling in views."
   ],
   "validation": {
-    "rust_execution_pending": true,
+    "rust_execution_pending": false,
     "hosted_visuals_pending": true,
     "native_vm_pending": true,
     "coverage": [
@@ -32,6 +32,31 @@
       "all_pngs_byte_identical_to_previous_reviewed_catalogue": true,
       "source_manifest_refreshed": true,
       "receipt": ".cache/launcher-polish-checks/ci-component-f652819ed8bd-14414490552/receipt.json"
+    },
+    "reviewed_hosted_result": {
+      "source_commit": "f652819ed8bd2003c97c78bee30f9e12dfbd003e",
+      "run_id": 44273633162,
+      "run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/44273633162",
+      "job_id": 134696142370,
+      "workspace_tests_passed": 1200,
+      "workspace_tests_ignored": 89,
+      "service_protocol_cases_passed": 49,
+      "strict_clippy_passed": true,
+      "site_passed": true,
+      "integration_passed": false,
+      "integration_failure": "Component catalogue fingerprints stale after domain change; reviewed source-bound refresh committed separately at98eb91864db.",
+      "arch_bundle_build": "skipped_after_integration_failure",
+      "visual_step_passed": false,
+      "visual_cases": 876,
+      "previous_baseline_passes": 828,
+      "reviewed_new_system_images": 24,
+      "previous24_reviewed_notification_media_images_byte_identical": true,
+      "visual_artifact_id": 14414363135,
+      "visual_archive_sha256": "28fcf121c8cd3affda92664958e5692fa8735f535872d58cf973c88fa7c1a68a",
+      "all_case_pngs_crc_verified": true,
+      "visual_receipt": ".cache/launcher-polish-checks/ci-visual-f652819ed8bd-14414363135/receipt.json",
+      "raw_log": ".cache/launcher-polish-checks/system-ci-f652-job.log",
+      "baseline_rerun_pending": true
     }
   },
   "vm_started": false,

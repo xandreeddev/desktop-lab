@@ -149,7 +149,7 @@
         "Represent system sampling loading, failure and recovery truthfully, retaining last-good data without presenting it as current.",
         "Make resized media content responsive and bound long title/artist metadata."
       ],
-      "active_slice": "Hidden Notes and pending media input passed hosted behavior checks; system observation is ready for hosted checks. Responsive media presentation follows.",
+      "active_slice": "Hidden Notes, pending media input and system observation passed hosted behavior and visual review. Responsive media presentation follows; accepted baselines await the full rerun.",
       "report": "reports/measurements/lucent-dashboard-input-polish.json",
       "system_report": "reports/measurements/lucent-system-observation-polish.json"
     },
