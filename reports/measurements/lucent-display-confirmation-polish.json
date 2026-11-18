@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-11-18",
-  "status": "hosted_behavior_passed_visual_review_pending",
+  "status": "source_verified_native_followup_pending",
   "scope": "Display confirmation and cancellation lifetimes, using the existing native transaction guardian.",
   "changes": [
     "Keep and Revert callbacks retain the rendered transaction and panel lifetime instead of resolving the latest transaction at delivery.",
@@ -11,7 +11,7 @@
   ],
   "validation": {
     "rust_execution_pending": false,
-    "hosted_visuals_pending": true,
+    "hosted_visuals_pending": false,
     "native_vm_pending": true,
     "coverage": [
       "Captured confirmation callbacks across replacement, terminal phases, countdown and panel lifetime.",
@@ -46,5 +46,35 @@
   },
   "vm_started": false,
   "native_accepted": false,
-  "full_polish_goal_complete": false
+  "full_polish_goal_complete": false,
+  "final_consolidated_validation": {
+    "source_commit": "4eb2e74360b8c7615e6d8e328759416c055cce6a",
+    "run_id": 44295059533,
+    "run_url": "https://github.com/xandreeddev/desktop-lab/actions/runs/44295059533",
+    "all_four_hosted_jobs_passed": true,
+    "strict_clippy_passed": true,
+    "workspace_Rust_cases_passed": 1247,
+    "controlled_protocol_cases_passed": 49,
+    "integration_Python_cases_passed": 919,
+    "site_passed": true,
+    "integration_passed": true,
+    "vulkan_cases": 944,
+    "vulkan_passed_cases": 944,
+    "vulkan_differences": 0,
+    "rust_job_id": 134769852132,
+    "visual_artifact_id": 14423329441,
+    "visual_archive_sha256": "8ba342ea44162bed371f0cacc579d3859af494b2a30a7c5b405cf4315005053a",
+    "visual_archive_digest_verified": true,
+    "all_case_pngs_present_and_crc_verified": true,
+    "visual_receipt": ".cache/launcher-polish-checks/ci-visual-4eb2e74360b8-14423329441/receipt.json",
+    "scope": "Exact consolidated source qualification, including comparison against the reviewed visual baselines. Historical failures and earlier source-specific native results retain their original scope. This run does not establish coherent release archive qualification, target compatibility, native interaction or performance acceptance.",
+    "coherent_release_archive_status": "verified_candidate_separate_release_run",
+    "target_qualification_pending": true,
+    "native_followup_pending": true,
+    "native_measurements_pending": true,
+    "performance_accepted": false,
+    "vm_started": false,
+    "coherent_release_run_id": 44298344018,
+    "coherent_release_report": "reports/measurements/lucent-polish-source-consolidation.json"
+  }
 }

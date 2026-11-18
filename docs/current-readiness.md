@@ -4,8 +4,8 @@
 
 The [polish backlog](desktop-polish.json) tracks the Caelestia reference and the
 one-feature-at-a-time delivery rule. The current source work covers the concrete
-workflow gaps below. **Final source qualification and coherent release review
-are still pending.** The [consolidated source report](../reports/measurements/lucent-polish-source-consolidation.json)
+workflow gaps below. **Source qualification and coherent archive
+review pass. Native qualification remains deferred.** The [consolidated source report](../reports/measurements/lucent-polish-source-consolidation.json)
 separates implemented behavior, source-specific test evidence and open acceptance.
 
 | Area | Implemented source scope |
@@ -23,35 +23,48 @@ separates implemented behavior, source-specific test evidence and open acceptanc
 | Responsive Media widget | Artwork, metadata and controls respond to card size with bounded labels, preserved player authority and frozen native input geometry during resize. |
 | Resource collection | Idle admission includes previews, background transitions, refits and native retirement; typed address/generation checks prevent retained historical feedback from becoming current pacing evidence. No performance improvement is claimed. |
 
-The consolidated hosted checkpoint,
-[`9efaf308bce3`](https://github.com/xandreeddev/desktop-lab/actions/runs/44290561050),
-passes **1,247 workspace Rust tests, all 49 controlled service cases and strict
-Clippy**, plus site, integration and the optimized Arch development build. The
-production Vulkan comparison ran 944 cases: all 932 existing baselines passed,
-and only twelve corrected session-tail baselines were missing. All twelve fresh
-images have now passed independent review and are accepted; final instructions,
-scroll focus and fixed actions are visible in each theme/density. This closes the
-review of all 56 session and 24 new Media variants. The original failed visual
-run remains recorded. A final full comparison with the accepted baselines is
-still required.
+The final application candidate,
+[`4eb2e74360b8`](https://github.com/xandreeddev/desktop-lab/actions/runs/44295059533),
+passes **all four standard jobs**: 1,247 workspace Rust tests, all 49 controlled
+service cases, strict Clippy, 919 Python tests, site checks and the optimized
+Arch development build. All **944 production Vulkan comparisons pass**. The
+visual artifact's published digest and every case PNG have been independently
+verified. All 56 session variants and 24 responsive Media variants were reviewed
+before accepting their baselines. The previous missing-baseline and corrected
+fixture attempts remain recorded in the source-specific reports.
 
 The current component catalogue was independently received from `30ed89acb7d3`:
 122 producer inputs, nine stories and 480 captures. Its archive digest, current
 fingerprints and full variant inventory validate; all 480 PNGs exactly match
 the previously reviewed matrix. The resource collector passes 29 owned Python
 fixtures and independent source review; the complete Python suite passes 919
-cases. These checks do not establish a final all-jobs hosted pass.
+cases, including the hosted integration job on the final candidate.
 
-The [coherent release producer](../ci/README.md) and
-[offline receiver](../ci/RECEIVING.md) are prepared and fixture-tested. The future
-archive includes all six managed clients, all 29 support files, acceptance
-examples, Component Lab and bundled notices. Its application commit/tree pin is
-still unset. Final delivery requires all four standard jobs on the pinned source,
-including the 49 controlled protocol cases and the full visual matrix, followed
-by a successful coherent build, independently verified receipt/archive and
-fresh catalogue review. Static ELF inspection does not establish target runtime
-ABI, native behavior or performance. The ordinary three-client development
-archive does not satisfy this coherent release scope.
+The [coherent release](https://github.com/xandreeddev/desktop-lab/actions/runs/44298344018)
+passes all nine declared stages from application source `4eb2e74360b8` and reviewed
+workflow source `91102c5952ff`. Its gates pass 1,247 workspace cases, seven Vulkan
+upload cases and one bar-pixel case; the doctest gate has zero cases. Eighty-nine
+workspace cases remain ignored in that gate, with the separate 49-case controlled
+protocol results recorded above. The archive contains all six managed clients,
+three acceptance clients, standalone Component Lab, 29 support files, five example
+sources and 14 notices. The [offline receiver](../ci/RECEIVING.md) verified the
+original API metadata, ZIP digest, receipt, exact source bindings and all 713
+payload files without running downloaded code.
+
+The fresh Arch catalogue has 480 PNGs from 122 current inputs. Every PNG exactly
+matches the reviewed website reference. Independent visual review covers 24
+images across all nine stories, all story states, five palettes, both densities
+and regular/narrow viewports. No website captures were replaced. All ten ELF
+consumers match cached direct library/version requirements. Of 134 FFmpeg public
+header hashes, 129 match and five version-named headers differ; current target
+state, symbol resolution and runtime ABI remain unaccepted. The
+[consolidated receipt](../reports/measurements/lucent-polish-source-consolidation.json)
+records the verified archive location and exact hashes.
+
+This is a candidate for later native qualification, with immutable nonexecutable
+review payloads. Historical fixed-cohort deployment helpers require reviewed
+adaptation for the changed utility files and the actual mixed rollback cohort.
+The build and static review establish no native interaction or performance result.
 
 The VM remains **powered off at the user's request to free memory**. Local
 builds, renders and native resource measurements remain stopped. Its last
