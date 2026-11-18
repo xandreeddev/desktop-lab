@@ -28,6 +28,15 @@ it. Use **Refresh** after adding files. Discovery runs on a service worker, keep
 good list on errors and is bounded to 32 choices. The path field remains available
 for media elsewhere.
 
+Rendered library cards retain their source descriptor and library lifetime.
+Refresh or replacement discovery cannot make an older card select a different
+file at the same list position. **Apply wallpaper** retains its selected source
+and target lifetime; changing either, refreshing or closing/reopening the panel
+retires that action. Returning to an earlier source requires a fresh Apply.
+New preview frames and viewport changes for the same source preserve current
+controls. See [wallpaper browsing and selection](wallpaper-browsing.md) for the
+shared callback rules and the online selector's submitted-search paging.
+
 Two original pixel-landscape loops are included: **Moonlit Lake** and **Amber Lake**.
 They keep the terrain and camera still while water moves. Install the samples with
 `python3 scripts/install-live-wallpaper-samples.py`, then refresh the picker.
@@ -59,6 +68,12 @@ below. An invalid file does not replace the current configuration. The source
 is preserved. Closing the panel cancels pending delivery; already-running native
 import work may finish and retain an unused owned asset. Preview work has its
 own cancellation and does not import a file.
+
+Hidden panel callbacks cannot start new panel work. Explicit global CLI
+commands retain their own authority while the panel is closed. The desktop
+checks a rendered Apply before requesting writable settings or reserving an
+import, so a retired callback cannot replace a newer choice or produce an
+unrelated settings error.
 
 Choose the default wallpaper or a connected monitor. Monitor overrides take
 precedence over the default. **Use static wallpaper** disables that monitor's

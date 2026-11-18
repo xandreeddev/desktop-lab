@@ -778,7 +778,7 @@ mod tests {
             image_url: String::new(),
             resolution: "2x2".into(),
         }];
-        app.update(D::Browser(B::Download(true)), effects);
+        app.update(D::Browser(app.browser.download_message(true)), effects);
         app.browser.generation
     }
     #[test]

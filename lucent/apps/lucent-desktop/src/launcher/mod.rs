@@ -471,9 +471,9 @@ impl Launcher {
             Mode::Wallpapers if input.browser.source.is_some() => Some(Intent::Browser(
                 if input.browser.items.is_empty() || input.browser.query != input.browser.submitted
                 {
-                    wallpaper_browser::Message::Search(1)
+                    wallpaper_browser::Message::Search
                 } else {
-                    wallpaper_browser::Message::Download(true)
+                    input.browser.download_message(true)
                 },
             )),
             Mode::Wallpapers => Some(Intent::Wallpaper(input.wallpaper_index, true)),

@@ -2365,8 +2365,21 @@ fn visual_regressions() {
             if name.starts_with("wallpapers-online") {
                 online_fixture(&mut app);
                 if name.ends_with("error") {
-                    app.browser.items.clear();
-                    app.browser.status = "Provider unavailable. Try again later.".into();
+                    use crate::wallpaper_browser::Message as Browse;
+                    app.browser.update(Browse::Search, &mut Effects::default());
+                    app.browser.update(
+                        Browse::Results(
+                            app.browser.generation,
+                            Err(lucent_domain::DomainError::Unavailable(
+                                "Provider unavailable. Try again later.".into(),
+                            )),
+                        ),
+                        &mut Effects::default(),
+                    );
+                    app.browser.update(
+                        Browse::Finished(app.browser.generation),
+                        &mut Effects::default(),
+                    );
                 }
             }
             if name == "palette-ocean" {
@@ -4722,6 +4735,7 @@ fn online_fixture(app: &mut Desktop) {
         crate::wallpaper_browser::Message::Query("landscape".into()),
         &mut Effects::default(),
     );
+    app.browser.submitted = app.browser.query.clone();
     app.browser.page = 1;
     app.browser.has_more = true;
     app.browser.status = "6 results · page 1".into();
@@ -4778,7 +4792,6 @@ fn online_browser_controls_and_selected_result_fit_at_small_and_large_sizes() {
             "wallpaper-search-submit",
             "download-theme",
             "download-wallpaper",
-            "catalog-previous",
             "catalog-next",
         ] {
             let hit = rendered.hits.iter().find(|h| h.id == id).unwrap();
@@ -4789,6 +4802,7 @@ fn online_browser_controls_and_selected_result_fit_at_small_and_large_sizes() {
                 hit.clip
             );
         }
+        assert!(rendered.hits.iter().all(|hit| hit.id != "catalog-previous"));
         if height > 360. {
             let selected = rendered
                 .hits
@@ -6079,7 +6093,10 @@ fn newer_static_and_browser_admission_drop_late_default_live_preparation() {
                 image_url: "https://fixture.invalid/image".into(),
                 resolution: "1x1".into(),
             }];
-            app.update(Message::Browser(Browse::Download(false)), &mut effects);
+            app.update(
+                Message::Browser(app.browser.download_message(false)),
+                &mut effects,
+            );
             assert!(app.browser.busy());
         } else {
             app.update(
@@ -6142,11 +6159,18 @@ fn live_cli_captures_default_and_keeps_pause_all_separate_from_profile_pause() {
         .insert(monitor.clone(), profile("monitor"));
     let monitor_profile = app.settings.live_wallpapers.monitors[&monitor].clone();
     let mut effects = Effects::default();
+    app.update(Message::LiveWallpaper(Live::Open), &mut effects);
     app.update(
         Message::LiveWallpaper(Live::Target(LiveWallpaperTarget::Monitor(monitor.clone()))),
         &mut effects,
     );
 
+    app.update(Message::LiveWallpaper(Live::Close), &mut effects);
+    effects.tasks.clear();
+    assert_eq!(
+        app.live_wallpaper.target,
+        LiveWallpaperTarget::Monitor(monitor.clone())
+    );
     let pause = app.command("wallpaper live pause").unwrap().unwrap();
     assert!(matches!(
         &pause,

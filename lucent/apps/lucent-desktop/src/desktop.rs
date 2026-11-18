@@ -270,10 +270,13 @@ impl Desktop {
         use lucent_usecases::live_wallpaper::{
             LiveWallpaperChange as Change, change_live_wallpaper, validate_live_wallpaper_import,
         };
+        let Some(message) = self.live_wallpaper.admit(message) else {
+            return;
+        };
         if !self.settings_writable
             && matches!(
                 message,
-                Live::ApplySelection
+                Live::ApplySelection(_)
                     | Live::Import(_)
                     | Live::ImportPath(..)
                     | Live::Pause(..)
@@ -291,10 +294,10 @@ impl Desktop {
         let admission = match &message {
             Live::Import(target) => Some((target, self.live_wallpaper.path.as_str())),
             Live::ImportPath(target, path) => Some((target, path.as_str())),
-            Live::ApplySelection => self
+            Live::ApplySelection(choice) => self
                 .live_wallpaper
-                .selected_source()
-                .map(|source| (&self.live_wallpaper.target, source.path.as_str())),
+                .apply_request(choice)
+                .map(|(target, source)| (target, source.path.as_str())),
             _ => None,
         };
         if let Some((target, path)) = admission
@@ -699,6 +702,7 @@ impl Desktop {
     }
     fn update_launcher(&mut self, message: launcher::Message, effects: &mut Effects<Message>) {
         let was_open = self.launcher.open();
+        let was_browser = was_open && self.launcher.mode() == Mode::Wallpapers;
         let palettes = if self.launcher.mode() == Mode::Themes
             || matches!(message, launcher::Message::Mode(Mode::Themes))
         {
@@ -729,6 +733,9 @@ impl Desktop {
             |child| intent = self.launcher.update(message, input, geometry, child),
             Message::Launcher,
         );
+        if was_browser && (!self.launcher.open() || self.launcher.mode() != Mode::Wallpapers) {
+            self.browser.retire_controls();
+        }
         self.update_dock(crate::dock::Message::Forced(self.launcher.open()), effects);
         self.panel_opened(Panel::Launcher, was_open, effects);
         if let Some(intent) = intent {
@@ -1966,20 +1973,23 @@ impl Component for Desktop {
                 for message in [
                     Browse::Source(Some(provider)),
                     Browse::Query(query),
-                    Browse::Search(1),
+                    Browse::Search,
                 ] {
                     self.update(Message::Browser(message), effects);
                 }
             }
             Message::Browser(message) => {
                 use crate::wallpaper_browser::Message as Browse;
+                let Some(message) = self.browser.admit(message) else {
+                    return;
+                };
                 let before = self.browser.generation;
-                let download = matches!(message, Browse::Download(_));
-                let colors = matches!(message, Browse::Download(true));
+                let download = matches!(message, Browse::Download { .. });
+                let colors = matches!(message, Browse::Download { colors: true, .. });
                 let changed_source = matches!(message, Browse::Source(_));
                 let mut superseded = false;
                 if let Browse::Ready(id, result) = &message
-                    && *id == self.browser.generation
+                    && self.browser.accepts_download(*id)
                     && let Some((browser_id, ticket, revision)) = self.browser_selection
                     && browser_id == *id
                 {
@@ -2758,7 +2768,10 @@ impl api::Application for Desktop {
                 );
             }));
         }
-        for subscription in self.browser.subscriptions(&self.adapters) {
+        for subscription in self
+            .browser
+            .subscriptions(&self.adapters.catalog, &self.adapters.assets)
+        {
             s.push(Subscription::stream(subscription.id, move |out, cancel| {
                 (subscription.run)(
                     Emitter::new(move |message| out.send(Message::Browser(message))),

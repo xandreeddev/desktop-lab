@@ -220,6 +220,13 @@ class Boundaries(unittest.TestCase):
         self.assert_no_imports([ROOT/'lucent/crates/lucent-services/src/video.rs'],
                                ('lucent_desktop', 'lucent_design', 'lucent_wayland', 'lucent_render'))
 
+    def test_wallpaper_browser_uses_only_specific_injected_ports(self):
+        path = ROOT / 'lucent/apps/lucent-desktop/src/wallpaper_browser.rs'
+        self.assert_no_platform_operations([path],
+            ('crate::desktop', 'crate::adapters', 'crate::platform',
+             'lucent_services', 'lucent_wayland', 'lucent_render'))
+        self.assertNotRegex(path.read_text(), r'\b(?:Desktop|DesktopAdapters)\b')
+
     def test_weather_domain_adapter_and_child_preserve_service_boundaries(self):
         root = ROOT / 'lucent/apps/lucent-desktop/src/weather'
         self.assert_no_platform_operations(sources(root, ('tests.rs',)),

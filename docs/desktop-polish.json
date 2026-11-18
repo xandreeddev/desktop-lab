@@ -155,14 +155,16 @@
     },
     {
       "id": "appearance",
-      "status": "in_progress",
+      "status": "implementation_ready_for_hosted_checks",
       "behavior": "Palette and wallpaper browsing, previews, applying, cancellation and failures share consistent motion, spacing and density.",
       "toolkit": "Prepared assets, streaming textures, clipping, motion and cache ownership.",
       "identified_work": [
         "Separate wallpaper search submission from pagination so editing a query cannot request page two of an unsubmitted search.",
         "Bind live wallpaper card selection and Apply to source identity across library reorder/replacement.",
         "Bind online result selection and download callbacks to the rendered result and selection lifetime; reject retired form callbacks before root admission."
-      ]
+      ],
+      "report": "reports/measurements/lucent-appearance-selection-polish.json",
+      "active_slice": "Submitted-query pagination, exact selection lifetimes, disabled controls and bounded metadata are ready for hosted behavior and visual checks."
     },
     {
       "id": "outputs-and-session",
@@ -181,7 +183,12 @@
       "id": "resources-and-motion",
       "status": "queued",
       "behavior": "Verify cold/warm interaction cost and presentation, including resize/return-to-FHD memory, against the existing resource targets.",
-      "toolkit": "Measured renderer/resource ownership and compositor pacing; keep resource checks part of each preceding feature as well."
+      "toolkit": "Measured renderer/resource ownership and compositor pacing; keep resource checks part of each preceding feature as well.",
+      "identified_work": [
+        "Reject retiring live-preview decoders and unsettled background transitions before and throughout an idle resource observation.",
+        "Bind presentation collection to the admitted surface/native generation; reject conflicting duplicate samples and retain explicit legacy-unverified scope."
+      ],
+      "native_acceptance": "Eligible RSS, cold/warm/resize resource targets and actual presentation pacing remain deferred under the VM and memory hold. Source audit did not demonstrate a production resource leak."
     }
   ]
 }

@@ -498,6 +498,8 @@ pub mod component {
         pub const TRACK: f32 = 4.0;
     }
     pub mod wallpaper_browser {
+        pub const METADATA_LINES: f32 = 1.0;
+        pub const STATUS_LINES: f32 = 2.0;
         pub const SOURCE_HEIGHT: f32 = 40.0;
         pub const SEARCH_HEIGHT: f32 = 48.0;
         pub const CARD_MIN_WIDTH: f32 = 176.0;

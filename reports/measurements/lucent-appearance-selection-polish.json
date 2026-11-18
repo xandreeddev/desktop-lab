@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-18",
+  "status": "implementation_ready_for_hosted_checks",
+  "scope": "Submitted wallpaper search paging and rendered selection authority in online and live wallpaper pickers.",
+  "changes": [
+    "Explicit Search submits the draft query from page one; paging retains the submitted provider and query.",
+    "Online page/card/download callbacks retain the result item and its presentation or selection lifetime; new searches clear old bounds and reject inconsistent provider/page responses.",
+    "Live cards retain the source descriptor and library lifetime; Apply retains its source and selection/target lifetime.",
+    "Refresh, replacement results, changed selection/target and close/reopen retire older controls; same-source preview and viewport updates preserve current authority.",
+    "Root admission rejects stale rendered actions before reserving work or reporting unrelated writable-settings errors.",
+    "Closed panel callbacks cannot start panel work, while explicit global CLI commands and admitted worker deliveries retain their own authority.",
+    "Online dismissal retires controls without cancelling an accepted download; live dismissal still retires pending import delivery.",
+    "Browser subscriptions receive only injected WallpaperCatalogPort and AssetPort dependencies.",
+    "Search/page/download buttons share admission predicates with enabled visuals and pointer/Tab availability.",
+    "Generated wallpaper-browser tokens bound result metadata to one line and status text to two."
+  ],
+  "validation": {
+    "rust_execution_pending": true,
+    "hosted_visuals_pending": true,
+    "native_vm_pending": true,
+    "rustfmt_parse_passed": true,
+    "documentation_diff_check_passed": true,
+    "architecture_cases_passed": 27,
+    "rust_regressions_authored": {
+      "browser": 12,
+      "live_child": 8,
+      "root_live": 2,
+      "total": 22
+    },
+    "design_tokens_check_passed": true,
+    "generated_token_count": 594,
+    "expected_visual_changes": {
+      "existing_browser_families": 3,
+      "palette_density_cases": 12,
+      "hosted_review_pending": true
+    },
+    "coverage_authored": [
+      "Actual rendered page callbacks after a draft edit, submitted-search paging and explicit new Search.",
+      "Online cards/downloads across provider/page/result replacement and A-to-B-to-A selection, invalid page responses and retired rendered search/form controls.",
+      "Live cards across valid recycled indices, changed descriptors, Refresh and close/reopen.",
+      "Live Apply across source/target replacement and A-to-B-to-A, while frame/viewport/same-source reselect preserve current actions.",
+      "Busy or repeated Apply, retired forms/close controls, exact imported targets and exhausted generation guards.",
+      "Root stale callbacks produce no reservation/import/save/error; global closed-panel commands remain usable; fresh captured Apply and duplicate completion routing are covered.",
+      "Injected provider query/download recording; disabled pointer/Tab state and bounded metadata/status layout at 320/640 widths and 240/580 heights in both themes.",
+      "Python architecture guard excludes the root adapter bundle from the wallpaper browser child."
+    ]
+  },
+  "vm_started": false,
+  "native_accepted": false,
+  "full_polish_goal_complete": false
+}

@@ -1,4 +1,5 @@
 use super::*;
+mod lifetimes;
 #[test]
 fn mailbox_keeps_only_latest_frame_and_one_pending_wake() {
     let stream = ImageStream::new();
@@ -202,7 +203,10 @@ fn library_card_previews_and_explicit_apply_uses_existing_validated_import_for_i
     );
     assert!(input.press(&scene, x, y).is_none());
     let message = input.release(x, y).unwrap();
-    assert!(matches!(&message, Message::SelectSource(0)));
+    assert!(matches!(
+        controller.admit(message.clone()),
+        Some(Message::SelectSource(_))
+    ));
     let pending_before = effects.tasks.len();
     assert!(controller.update(message, &mut effects).is_none());
     assert!(controller.importing.is_none());
@@ -223,7 +227,10 @@ fn library_card_previews_and_explicit_apply_uses_existing_validated_import_for_i
     );
     assert!(input.press(&scene, x, y).is_none());
     let message = input.release(x, y).unwrap();
-    assert!(matches!(message, Message::ApplySelection));
+    assert!(matches!(
+        controller.admit(message.clone()),
+        Some(Message::ApplySelection(_))
+    ));
     assert!(
         matches!(controller.update(message, &mut effects), Some(Intent::ImportStarted(captured, _)) if captured == target)
     );
@@ -268,12 +275,12 @@ fn preview_navigation_keeps_applied_profile_and_import_busy_failure_stays_separa
     };
     assert!(
         controller
-            .update(Message::SelectSource(0), &mut effects)
+            .update(controller.select_message(0), &mut effects)
             .is_none()
     );
     assert!(
         controller
-            .update(Message::Browse(1), &mut effects)
+            .update(controller.browse_message(1), &mut effects)
             .is_none()
     );
     assert_eq!(controller.selected_source(), Some(&other));
@@ -284,7 +291,7 @@ fn preview_navigation_keeps_applied_profile_and_import_busy_failure_stays_separa
     assert!(controller.importing.is_none());
     assert_eq!(settings.default.as_ref(), Some(&profile));
     let Some(Intent::ImportStarted(_, revision)) =
-        controller.update(Message::ApplySelection, &mut effects)
+        controller.update(controller.apply_message(), &mut effects)
     else {
         panic!("Apply must start the validated import path");
     };
@@ -299,12 +306,12 @@ fn preview_navigation_keeps_applied_profile_and_import_busy_failure_stays_separa
     let task_count = effects.tasks.len();
     assert!(
         controller
-            .update(Message::ApplySelection, &mut effects)
+            .update(controller.apply_message(), &mut effects)
             .is_none()
     );
     assert!(
         controller
-            .update(Message::SelectSource(0), &mut effects)
+            .update(controller.select_message(0), &mut effects)
             .is_none()
     );
     assert_eq!(controller.importing.as_ref().unwrap().revision, revision);
@@ -352,7 +359,7 @@ fn refreshed_library_preserves_selected_path_and_browse_clamps_without_applying(
     effects.tasks.clear();
     assert!(
         controller
-            .update(Message::Browse(i32::MAX), &mut effects)
+            .update(controller.browse_message(i32::MAX), &mut effects)
             .is_none()
     );
     assert_eq!(controller.selection, 2);
@@ -376,17 +383,17 @@ fn refreshed_library_preserves_selected_path_and_browse_clamps_without_applying(
     assert_eq!(controller.selection, 0);
     assert_eq!(controller.selected_source(), Some(&selected));
     assert_eq!(controller.carousel.target_value(), 0.);
-    controller.update(Message::Browse(i32::MIN), &mut effects);
+    controller.update(controller.browse_message(i32::MIN), &mut effects);
     assert_eq!(controller.selection, 0);
-    controller.update(Message::SelectSource(usize::MAX), &mut effects);
+    controller.update(controller.select_message(usize::MAX), &mut effects);
     assert_eq!(
         controller.selection, 0,
         "stale card identities cannot retarget a missing index"
     );
     controller.update(Message::Close, &mut effects);
     assert_eq!(controller.preview.retained_bytes(), 0);
-    controller.update(Message::Browse(1), &mut effects);
-    controller.update(Message::ApplySelection, &mut effects);
+    controller.update(controller.browse_message(1), &mut effects);
+    controller.update(controller.apply_message(), &mut effects);
     assert!(
         controller.importing.is_none(),
         "closed preview actions cannot start imports"
@@ -505,8 +512,8 @@ fn refresh_invalidates_same_path_pixels_failures_and_waits_for_fresh_discovery_a
     assert_eq!(controller.preview.inspect()["cached"], 0);
     assert_eq!(controller.preview.retained_bytes(), 0);
     for message in [
-        Message::Browse(0),
-        Message::SelectSource(0),
+        controller.browse_message(0),
+        controller.select_message(0),
         Message::RetryPreview,
     ] {
         controller.update(message, &mut effects);
@@ -555,7 +562,7 @@ fn refresh_invalidates_same_path_pixels_failures_and_waits_for_fresh_discovery_a
     assert!(running.stop.cancelled());
     assert_eq!(controller.preview.retained_bytes(), 0);
     assert_eq!(controller.preview.inspect()["cached"], 0);
-    controller.update(Message::Browse(0), &mut effects);
+    controller.update(controller.browse_message(0), &mut effects);
     assert_eq!(controller.preview.inspect()["selected"], false);
     assert_eq!(controller.subscriptions()[0].id, retiring_id);
     controller.update(
@@ -661,7 +668,7 @@ fn root_blocks_unwritable_preview_apply_and_routes_only_exact_preview_failures()
     app.settings_writable = false;
     let before = serde_json::to_value(&app.settings).unwrap();
     app.update(
-        DesktopMessage::LiveWallpaper(Message::ApplySelection),
+        DesktopMessage::LiveWallpaper(app.live_wallpaper.apply_message()),
         &mut effects,
     );
     assert!(app.live_wallpaper.importing.is_none());
@@ -1357,6 +1364,8 @@ fn off_retires_only_its_captured_import_target_and_rejects_late_success() {
 fn controls_use_their_captured_target_and_import_reads_the_current_path() {
     let mut controller = controller();
     let mut effects = Effects::default();
+    controller.update(Message::Open, &mut effects);
+    effects.tasks.clear();
     let captured = LiveWallpaperTarget::Monitor(MonitorId::new("DEMO-1").unwrap());
     controller.update(Message::Target(LiveWallpaperTarget::Default), &mut effects);
     assert!(
@@ -1795,4 +1804,94 @@ fn session_lock_observation_lifetime_and_failure_preserve_manual_preferences() {
         !watching(&app),
         "removing playback retires lock observation"
     );
+}
+
+#[test]
+fn root_rejects_stale_apply_and_form_before_writable_checks_but_keeps_closed_cli_commands() {
+    use crate::desktop::{Desktop, Message as Root};
+    use lucent_api::{Application, Component};
+    let mut app = Desktop::new(crate::test_adapters::adapters());
+    app.live_wallpaper = lifetimes::ready();
+    let apply = lifetimes::control(&mut app.live_wallpaper, "live-apply", true);
+    let form = lifetimes::control(&mut app.live_wallpaper, "live-import", true);
+    app.live_wallpaper.update(
+        app.live_wallpaper.select_message(1),
+        &mut Effects::default(),
+    );
+    app.live_wallpaper.error = "Current feedback".into();
+    let before = app.settings.clone();
+    let mut effects = Effects::default();
+    app.update(Root::LiveWallpaper(apply), &mut effects);
+    assert_eq!(app.live_wallpaper.error, "Current feedback");
+    app.update(Root::LiveWallpaper(Message::Close), &mut effects);
+    app.update(Root::LiveWallpaper(form), &mut effects);
+    assert_eq!(app.live_wallpaper.error, "Current feedback");
+    assert_eq!(app.settings, before);
+    assert!(effects.tasks.is_empty());
+    app.settings_writable = true;
+    app.update(
+        app.command("wallpaper live play /fixture/closed-cli.mp4")
+            .unwrap()
+            .unwrap(),
+        &mut effects,
+    );
+    assert!(!app.live_wallpaper.open);
+    assert!(app.live_wallpaper.importing.is_some());
+    assert_eq!(
+        effects
+            .tasks
+            .iter()
+            .filter(|task| task.queue == crate::work::APPEARANCE)
+            .count(),
+        1
+    );
+    app.update(
+        app.command("wallpaper live off").unwrap().unwrap(),
+        &mut effects,
+    );
+    assert!(app.live_wallpaper.importing.is_none());
+}
+
+#[test]
+fn root_applies_the_admitted_source_and_target_after_the_picker_moves_on() {
+    use crate::desktop::{Desktop, Message as Root};
+    use lucent_api::Component;
+    for keyboard in [false, true] {
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        app.live_wallpaper = lifetimes::ready();
+        app.settings_writable = true;
+        let expected = app.live_wallpaper.selected_source().unwrap().clone();
+        let apply = lifetimes::control(&mut app.live_wallpaper, "live-apply", keyboard);
+        let mut effects = Effects::default();
+        app.update(Root::LiveWallpaper(apply.clone()), &mut effects);
+        let monitor = MonitorId::new("DEMO-1").unwrap();
+        app.update(
+            Root::LiveWallpaper(Message::Target(LiveWallpaperTarget::Monitor(
+                monitor.clone(),
+            ))),
+            &mut effects,
+        );
+        app.update(
+            Root::LiveWallpaper(app.live_wallpaper.select_message(1)),
+            &mut effects,
+        );
+        app.live_wallpaper.error = "Current feedback".into();
+        app.update(Root::LiveWallpaper(apply), &mut effects);
+        assert_eq!(app.live_wallpaper.error, "Current feedback");
+        assert_eq!(effects.tasks.len(), 1);
+        let task = effects.tasks.pop().unwrap();
+        assert_eq!(task.queue, crate::work::APPEARANCE);
+        app.update(task.run(), &mut effects);
+        assert_eq!(
+            app.settings
+                .live_wallpapers
+                .default
+                .as_ref()
+                .unwrap()
+                .asset
+                .source,
+            expected
+        );
+        assert!(!app.settings.live_wallpapers.monitors.contains_key(&monitor));
+    }
 }

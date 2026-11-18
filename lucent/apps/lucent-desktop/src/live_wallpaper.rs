@@ -23,14 +23,20 @@ impl StopSignal for PlaybackStopAdapter {
 }
 #[derive(Clone)]
 pub enum Message {
+    /// Only rendered panel callbacks carry this presentation authority. Native
+    /// commands and accepted worker deliveries keep their independent lifetime.
+    Panel(u64, Box<Message>),
     Open,
     Close,
     Ignore,
     RefreshLibrary,
     LibraryLoaded(u64, Result<Vec<Wallpaper>>),
-    SelectSource(usize),
-    Browse(i32),
-    ApplySelection,
+    SelectSource(SourceChoice),
+    Browse {
+        revision: u64,
+        delta: i32,
+    },
+    ApplySelection(ApplyChoice),
     RetryPreview,
     Preview(preview::Message),
     PreviewViewport(f32, f32, lucent_api::Density),
@@ -51,6 +57,17 @@ pub enum Message {
     WorkerFailed(u64, String),
     Scroll(lucent_api::ScrollEvent),
     Frame(f64),
+}
+#[derive(Clone)]
+pub struct SourceChoice {
+    revision: u64,
+    source: Wallpaper,
+}
+#[derive(Clone)]
+pub struct ApplyChoice {
+    source: SourceChoice,
+    selection: u64,
+    target: LiveWallpaperTarget,
 }
 pub enum Intent {
     ImportStarted(LiveWallpaperTarget, u64),
@@ -157,6 +174,9 @@ pub struct LiveWallpaper {
     library_loading: bool,
     library_error: String,
     library_revision: u64,
+    panel_revision: u64,
+    library_presentation: u64,
+    selection_revision: u64,
     library_cancel: Cancellation,
     prepared: BTreeMap<String, Arc<ImageData>>,
 }
@@ -194,6 +214,9 @@ impl LiveWallpaper {
             library_loading: false,
             library_error: String::new(),
             library_revision: 0,
+            panel_revision: 0,
+            library_presentation: 0,
+            selection_revision: 0,
             library_cancel: Cancellation::default(),
             prepared: BTreeMap::new(),
         }
@@ -441,14 +464,102 @@ impl LiveWallpaper {
         );
         subscriptions
     }
+    /// The root uses this before persistence/import validation, so an expired
+    /// callback cannot even replace current feedback with a validation error.
+    pub fn admit(&self, message: Message) -> Option<Message> {
+        if let Message::Panel(revision, message) = message {
+            return (self.open && revision == self.panel_revision && revision < u64::MAX)
+                .then(|| self.admit(*message))
+                .flatten();
+        }
+        if matches!(
+            message,
+            Message::RefreshLibrary
+                | Message::SelectSource(_)
+                | Message::Browse { .. }
+                | Message::ApplySelection(_)
+                | Message::RetryPreview
+                | Message::EditPath(_)
+                | Message::Target(_)
+                | Message::Import(_)
+                | Message::Scroll(_)
+                | Message::Policy(..)
+                | Message::Inherit(_)
+                | Message::RetrySave
+        ) && !self.open
+        {
+            return None;
+        }
+        if let Message::ApplySelection(choice) = &message
+            && self.apply_request(choice).is_none()
+        {
+            return None;
+        }
+        Some(message)
+    }
+    fn source_choice(&self, index: usize) -> Option<SourceChoice> {
+        (self.open && self.library_presentation < u64::MAX).then_some(())?;
+        Some(SourceChoice {
+            revision: self.library_presentation,
+            source: self.library.get(index)?.clone(),
+        })
+    }
+    fn resolve_source(&self, choice: &SourceChoice) -> Option<usize> {
+        if !self.open || choice.revision != self.library_presentation || choice.revision == u64::MAX
+        {
+            return None;
+        }
+        self.library
+            .iter()
+            .position(|source| source == &choice.source)
+    }
+    pub fn select_message(&self, index: usize) -> Message {
+        self.source_choice(index)
+            .map_or(Message::Ignore, Message::SelectSource)
+    }
+    pub fn browse_message(&self, delta: i32) -> Message {
+        Message::Browse {
+            revision: self.library_presentation,
+            delta,
+        }
+    }
+    pub fn apply_message(&self) -> Message {
+        if self.library_loading || self.importing.is_some() || self.selection_revision == u64::MAX {
+            return Message::Ignore;
+        }
+        self.source_choice(self.selection)
+            .map_or(Message::Ignore, |source| {
+                Message::ApplySelection(ApplyChoice {
+                    source,
+                    selection: self.selection_revision,
+                    target: self.target.clone(),
+                })
+            })
+    }
+    pub fn apply_request<'a>(
+        &self,
+        choice: &'a ApplyChoice,
+    ) -> Option<(&'a LiveWallpaperTarget, &'a Wallpaper)> {
+        (self.open
+            && !self.library_loading
+            && self.importing.is_none()
+            && self.selection_revision < u64::MAX
+            && choice.selection == self.selection_revision
+            && choice.target == self.target
+            && self.resolve_source(&choice.source) == Some(self.selection))
+        .then_some((&choice.target, &choice.source.source))
+    }
     pub fn update(&mut self, message: Message, effects: &mut Effects<Message>) -> Option<Intent> {
+        let message = self.admit(message)?;
         match message {
+            Message::Panel(..) => unreachable!("panel authority is unwrapped at admission"),
             Message::Ignore => return None,
             Message::Open => {
                 if self.open {
                     return None;
                 }
                 self.open = true;
+                self.panel_revision = self.panel_revision.saturating_add(1);
                 if self.mounted && self.first_frame_submitted {
                     // A closing surface is already submitted. Reverse its
                     // current visible progress without resetting to zero.
@@ -483,6 +594,7 @@ impl LiveWallpaper {
                 self.library_loading = false;
                 match result {
                     Ok(mut library) => {
+                        self.library_presentation = self.library_presentation.saturating_add(1);
                         let selected_path =
                             self.selected_source().map(|source| source.path.clone());
                         library.truncate(32);
@@ -505,9 +617,10 @@ impl LiveWallpaper {
                     Err(error) => self.library_error = error.to_string(),
                 }
             }
-            Message::SelectSource(index) => {
-                if !self.open || index >= self.library.len() {
-                    return None;
+            Message::SelectSource(choice) => {
+                let index = self.resolve_source(&choice)?;
+                if self.selected_source() != Some(&choice.source) {
+                    self.selection_revision = self.selection_revision.saturating_add(1);
                 }
                 self.selection = index;
                 self.carousel.target(
@@ -518,23 +631,24 @@ impl LiveWallpaper {
                 );
                 self.sync_preview();
             }
-            Message::Browse(delta) => {
-                if !self.open || self.library.is_empty() {
+            Message::Browse { revision, delta } => {
+                if !self.open
+                    || self.library.is_empty()
+                    || revision != self.library_presentation
+                    || revision == u64::MAX
+                {
                     return None;
                 }
                 let index = self
                     .selection
                     .saturating_add_signed(delta as isize)
                     .min(self.library.len() - 1);
-                return self.update(Message::SelectSource(index), effects);
+                return self.update(self.select_message(index), effects);
             }
-            Message::ApplySelection => {
-                if !self.open {
-                    return None;
-                }
-                let source = self.selected_source()?;
+            Message::ApplySelection(choice) => {
+                let (target, source) = self.apply_request(&choice)?;
                 return self.update(
-                    Message::ImportPath(self.target.clone(), source.path.clone()),
+                    Message::ImportPath(target.clone(), source.path.clone()),
                     effects,
                 );
             }
@@ -605,6 +719,8 @@ impl LiveWallpaper {
             }
             Message::Close => {
                 self.open = false;
+                self.panel_revision = self.panel_revision.saturating_add(1);
+                self.library_presentation = self.library_presentation.saturating_add(1);
                 self.awaiting_first_frame = None;
                 self.motion.target(
                     0.,
@@ -631,6 +747,9 @@ impl LiveWallpaper {
                 }
             }
             Message::Target(target) => {
+                if self.target != target {
+                    self.selection_revision = self.selection_revision.saturating_add(1);
+                }
                 self.target = target;
                 self.error.clear();
             }
@@ -641,6 +760,7 @@ impl LiveWallpaper {
                 if self.importing.is_some() {
                     return None;
                 } else {
+                    self.selection_revision = self.selection_revision.saturating_add(1);
                     self.revision = self.revision.wrapping_add(1);
                     let revision = self.revision;
                     self.importing = Some(Import {
@@ -829,6 +949,7 @@ impl LiveWallpaper {
         // replaced without changing its path. Drop cached pixels/failures and
         // demand, but retain a retiring decoder until its explicit Ended ACK.
         self.preview.clear();
+        self.library_presentation = self.library_presentation.saturating_add(1);
         self.library_cancel.cancel();
         let Some(revision) = self.library_revision.checked_add(1) else {
             self.library_loading = false;

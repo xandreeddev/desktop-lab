@@ -401,6 +401,8 @@
   --component-osd-padding: var(--space-lg);
   --component-osd-margin: var(--space-xl);
   --component-osd-track: var(--space-xs);
+  --component-wallpaper-browser-metadata-lines: 1;
+  --component-wallpaper-browser-status-lines: 2;
   --component-wallpaper-browser-source-height: 40px;
   --component-wallpaper-browser-search-height: var(--component-input-height);
   --component-wallpaper-browser-card-min-width: 176px;

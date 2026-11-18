@@ -62,7 +62,7 @@ impl LiveWallpaper {
                     caption: &source.name,
                     image: self.preview.frame_for(&source.path).cloned(),
                     unavailable: index == self.selection && !self.preview.error().is_empty(),
-                    select: Message::SelectSource(index),
+                    select: self.select_message(index),
                     id: format!("live-library-{index}"),
                 }
             })
@@ -76,16 +76,19 @@ impl LiveWallpaper {
             center,
             artwork,
             controls: Controls {
-                previous: ("live-previous", Message::Browse(-1)),
-                next: ("live-next", Message::Browse(1)),
+                previous: ("live-previous", self.browse_message(-1)),
+                next: ("live-next", self.browse_message(1)),
                 apply: Action {
                     label: if applied {
                         "Applied"
                     } else {
                         "Apply wallpaper"
                     },
-                    message: Message::ApplySelection,
-                    enabled: save.writable && self.importing.is_none(),
+                    message: self.apply_message(),
+                    enabled: save.writable
+                        && self.importing.is_none()
+                        && !self.library_loading
+                        && matches!(self.apply_message(), Message::ApplySelection(_)),
                     id: "live-apply",
                 },
             },
@@ -354,5 +357,9 @@ impl LiveWallpaper {
         ])
         .fill()
         .background(Color::TRANSPARENT)
+        .map({
+            let revision = self.panel_revision;
+            move |message| Message::Panel(revision, Box::new(message))
+        })
     }
 }

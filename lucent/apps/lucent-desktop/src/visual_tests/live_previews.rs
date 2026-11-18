@@ -167,7 +167,7 @@ pub(super) fn prepare(app: &mut Desktop, name: &str, width: f32, height: f32) {
         &mut Effects::default(),
     );
     app.update(
-        Message::LiveWallpaper(Live::SelectSource(1)),
+        Message::LiveWallpaper(app.live_wallpaper.select_message(1)),
         &mut Effects::default(),
     );
     if !name.ends_with("loading") {
@@ -211,8 +211,9 @@ pub(super) fn assert_scene(scene: &Scene<Message>, name: &str) {
         .find(|hit| hit.id == "live-library-1")
         .unwrap();
     assert!(matches!(
-        selected.click,
-        Some(Message::LiveWallpaper(Live::SelectSource(1)))
+        selected.click.as_ref(),
+        Some(Message::LiveWallpaper(Live::Panel(_, message)))
+            if matches!(message.as_ref(), Live::SelectSource(_))
     ));
     let apply = scene
         .hits
@@ -220,8 +221,9 @@ pub(super) fn assert_scene(scene: &Scene<Message>, name: &str) {
         .find(|hit| hit.id == "live-apply")
         .unwrap();
     assert!(matches!(
-        apply.click,
-        Some(Message::LiveWallpaper(Live::ApplySelection))
+        apply.click.as_ref(),
+        Some(Message::LiveWallpaper(Live::Panel(_, message)))
+            if matches!(message.as_ref(), Live::ApplySelection(_))
     ));
     for hit in [selected, apply] {
         assert!(
