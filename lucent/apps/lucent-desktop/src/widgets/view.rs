@@ -98,10 +98,9 @@ impl View<'_> {
             .tuple();
         let editor_height = super::sizing::editor_height(self.host.editing());
         let base = widget_size(id);
-        // Notes uses the actual resized card, rather than a fixed editor
-        // centered inside a larger decorative shell. Other catalog views keep
-        // their established base layouts.
-        let content_size = if matches!(id, "notes" | "weather") {
+        // Responsive views receive the actual card extent. A captured native
+        // source still uses its frozen size; only the preview sees resizing.
+        let content_size = if matches!(id, "notes" | "weather" | "media") {
             size
         } else {
             base
@@ -375,18 +374,27 @@ pub(super) fn weather(d: &View<'_>, cx: &ViewContext) -> Element<Message> {
         .map(Message::Weather)
 }
 
-pub(super) fn media(d: &View<'_>, _: &ViewContext) -> Element<Message> {
+pub(super) fn media(d: &View<'_>, cx: &ViewContext) -> Element<Message> {
+    let content_width = (cx.width - component::media::INSET * 2.).max(0.);
+    let extra_height = (cx.height - component::widget_size::media::HEIGHT).max(0.);
+    let artwork_height = component::media::ARTWORK_HEIGHT + extra_height;
+    let transport_width =
+        component::media::PLAY_WIDTH + component::icon_button::EXTENT * 2. + space::SM * 2.;
     let artwork = d
         .input
         .media
         .artwork()
         .cloned()
-        .map(Element::image)
+        .map(|image| Element::image(image).cover())
         .unwrap_or_else(|| {
-            Element::stack(vec![d.icon("music", icon::ARTWORK).at(
-                component::media::FALLBACK_LEFT,
-                component::media::FALLBACK_TOP,
-            )])
+            Element::stack(vec![
+                d.icon("music", icon::ARTWORK)
+                    .at(
+                        (content_width - icon::ARTWORK) / 2.,
+                        (artwork_height - icon::ARTWORK) / 2.,
+                    )
+                    .id("media-artwork-fallback"),
+            ])
             .background(d.surface_color())
         });
     let title = d.input.media.label();
@@ -421,69 +429,72 @@ pub(super) fn media(d: &View<'_>, _: &ViewContext) -> Element<Message> {
     };
     Element::stack(vec![
         artwork
-            .size(
-                component::media::CONTENT_WIDTH,
-                component::media::ARTWORK_HEIGHT,
-            )
+            .size(content_width, artwork_height)
             .at(component::media::INSET, component::media::INSET)
             .radius(radius::CARD)
             .on_click(Message::Media(crate::media::Message::Open))
             .id("media-open"),
         d.label(title, font::HEADING)
-            .size(
-                component::media::CONTENT_WIDTH,
-                component::media::TITLE_HEIGHT,
+            .size(content_width, component::media::TITLE_HEIGHT)
+            .at(
+                component::media::INSET,
+                component::media::TITLE_TOP + extra_height,
             )
-            .at(component::media::INSET, component::media::TITLE_TOP),
+            .wrap(component::media::TITLE_LINES as usize)
+            .id("media-title"),
         d.label(d.input.media.artist(), font::SMALL)
-            .size(
-                component::media::CONTENT_WIDTH,
-                component::media::ARTIST_HEIGHT,
+            .size(content_width, component::media::ARTIST_HEIGHT)
+            .at(
+                component::media::INSET,
+                component::media::ARTIST_TOP + extra_height,
             )
-            .at(component::media::INSET, component::media::ARTIST_TOP)
-            .opacity(opacity::SUPPORTING),
+            .wrap(component::media::ARTIST_LINES as usize)
+            .opacity(opacity::SUPPORTING)
+            .id("media-artist"),
         Element::empty()
-            .size(
-                component::media::CONTENT_WIDTH,
-                component::media::PROGRESS_HEIGHT,
+            .size(content_width, component::media::PROGRESS_HEIGHT)
+            .at(
+                component::media::INSET,
+                component::media::PROGRESS_TOP + extra_height,
             )
-            .at(component::media::INSET, component::media::PROGRESS_TOP)
             .radius(radius::INDICATOR)
-            .background(d.surface_color()),
+            .background(d.surface_color())
+            .id("media-progress-track"),
         Element::empty()
-            .size(
-                component::media::CONTENT_WIDTH * progress,
-                component::media::PROGRESS_HEIGHT,
+            .size(content_width * progress, component::media::PROGRESS_HEIGHT)
+            .at(
+                component::media::INSET,
+                component::media::PROGRESS_TOP + extra_height,
             )
-            .at(component::media::INSET, component::media::PROGRESS_TOP)
             .radius(radius::INDICATOR)
-            .background(d.accent()),
-        button("media-previous", "previous", command("previous")).at(
-            component::media::PREVIOUS_LEFT,
-            component::media::NAVIGATION_TOP,
-        ),
-        button(
-            "media-play",
-            if d.input
-                .media
-                .playback()
-                .is_some_and(|playback| playback.status == lucent_domain::PlaybackStatus::Playing)
-            {
-                "pause"
-            } else {
-                "play"
-            },
-            command("toggle"),
-        )
-        .size(component::media::PLAY_WIDTH, component::media::PLAY_HEIGHT)
-        .padding(space::MD)
-        .radius(radius::SEARCH)
-        .background(d.accent())
-        .tint(d.theme().on_primary)
-        .at(component::media::PLAY_LEFT, component::media::PLAY_TOP),
-        button("media-next", "next", command("next")).at(
-            component::media::NEXT_LEFT,
-            component::media::NAVIGATION_TOP,
+            .background(d.accent())
+            .id("media-progress-fill"),
+        Element::row(vec![
+            button("media-previous", "previous", command("previous")),
+            button(
+                "media-play",
+                if d.input.media.playback().is_some_and(|playback| {
+                    playback.status == lucent_domain::PlaybackStatus::Playing
+                }) {
+                    "pause"
+                } else {
+                    "play"
+                },
+                command("toggle"),
+            )
+            .size(component::media::PLAY_WIDTH, component::media::PLAY_HEIGHT)
+            .padding(space::MD)
+            .radius(radius::SEARCH)
+            .background(d.accent())
+            .tint(d.theme().on_primary),
+            button("media-next", "next", command("next")),
+        ])
+        .size(transport_width, component::media::PLAY_HEIGHT)
+        .gap(space::SM)
+        .align(Align::Center)
+        .at(
+            (cx.width - transport_width) / 2.,
+            component::media::PLAY_TOP + extra_height,
         ),
     ])
     .fill()

@@ -258,6 +258,8 @@
   --component-system-memory-progress-top: 129px;
   --component-system-network-top: 144px;
   --component-system-content-width: 234px;
+  --component-media-title-lines: 1;
+  --component-media-artist-lines: 1;
   --component-media-progress-height: 3px;
   --component-media-inset: 18px;
   --component-media-artist-height: 24px;

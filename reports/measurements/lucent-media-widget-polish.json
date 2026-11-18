@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-18",
+  "status": "source_prepared_hosted_checks_pending",
+  "scope": "Responsive Media widget geometry, bounded metadata and preserved playback/resize input ownership. No native or performance acceptance is claimed.",
+  "changes": [
+    "Media receives the actual widget card size, including the frozen native source size during resize capture.",
+    "Width expands artwork, title, artist and progress; height grows artwork and shifts the metadata and transport block while preserving its bottom spacing.",
+    "An SDK Row centers the transport controls, and the fallback music icon centers within the artwork rectangle.",
+    "Artwork uses existing cover fitting to preserve aspect ratio with cropping.",
+    "Generated TITLE_LINES and ARTIST_LINES tokens cap each metadata row at one line with ellipsis."
+  ],
+  "preserved_contracts": [
+    "MediaCommand retains the displayed player identity and existing capability, pending-command and player-removal admission.",
+    "Unavailable playback controls remain outside pointer hits and keyboard traversal; artwork still opens the media panel.",
+    "Resize previews do not mutate preferences; native source input geometry remains frozen until a successful release.",
+    "Cancellation and output constraints preserve saved preferred sizes."
+  ],
+  "toolkit": {
+    "new_public_api": false,
+    "reused": [
+      "Row sizing, spacing and cross-axis alignment",
+      "Image cover fitting with rounded painting and hit geometry",
+      "Text wrapping and line caps",
+      "Existing controlled widget resize and native source/preview composition"
+    ],
+    "existing_geometry_tokens_retained": true
+  },
+  "validation": {
+    "new_Rust_cases_prepared": 9,
+    "Rust_execution_pending": true,
+    "hosted_visuals_pending": true,
+    "native_vm_pending": true,
+    "local_Rust_compilation_performed": false,
+    "local_rendering_performed": false,
+    "formatting_passed": true,
+    "diff_and_new_file_whitespace_checks_passed": true,
+    "architecture_cases_passed": 27,
+    "design_token_cases_passed": 4,
+    "generated_tokens_verified": 598,
+    "visual_fixture_families_added": [
+      "media-widget-default",
+      "media-widget-wide-long",
+      "media-widget-tall",
+      "media-widget-fallback",
+      "media-widget-pending",
+      "media-widget-resize-preview"
+    ],
+    "new_visual_comparisons_prepared": 24,
+    "expected_existing_golden_changes": [],
+    "existing_fixture_scope": "Existing widget goldens contain Notes, Calendar, Weather, Clock or System, while the widgets case is a launcher selector. Existing media-* cases render the media panel. The separate bounded_widget_pixels_match_the_full_surface Vulkan test includes Media and remains required.",
+    "baseline_promotion_performed": false,
+    "coverage_prepared": [
+      "Actual Layout at minimum, wide, tall and combined sizes, with complete centered controls and preserved bottom spacing.",
+      "Long title/artist ellipsis, cover UV aspect and rounded hits, and centered fallback artwork.",
+      "Real pointer and Tab/Enter commands, exact player identity, unavailable/pending/removed-player guards and visible availability labels.",
+      "Actual resize-grip capture, input-only frozen native source, responsive preview, committed source reconstruction and preference serialization.",
+      "Cancelled resize and presentation-only output constraints."
+    ]
+  },
+  "vm_started": false,
+  "native_accepted": false,
+  "full_polish_goal_complete": false
+}

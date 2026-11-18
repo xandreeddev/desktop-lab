@@ -307,6 +307,8 @@ pub mod component {
         pub const CONTENT_WIDTH: f32 = 234.0;
     }
     pub mod media {
+        pub const TITLE_LINES: f32 = 1.0;
+        pub const ARTIST_LINES: f32 = 1.0;
         pub const PROGRESS_HEIGHT: f32 = 3.0;
         pub const INSET: f32 = 18.0;
         pub const ARTIST_HEIGHT: f32 = 24.0;

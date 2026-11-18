@@ -61,9 +61,10 @@ the last committed size, not the current preview.
 3. Source trees become input-only. The existing pointer-pass-through fullscreen
    preview draws the changed card bounds and token spacing grid. The preview
    receives neither pointer input nor keyboard focus.
-4. Views compose ordinary SDK elements and immutable prepared artwork. Content
-   keeps its original typography and design extent, centered within the changed
-   card. This does not scale a bitmap or reduce physical rendering density.
+4. Views compose ordinary SDK elements and immutable prepared artwork. Notes,
+   Weather and Media use the actual card extent; other views center their
+   original design extent. Typography and physical rendering density stay the
+   same.
 5. Release snaps and commits the size, removes the preview and recalculates
    bounded native buffers, including rounded clipping and shadow support.
 
@@ -75,6 +76,30 @@ Saved preferences survive output changes: presentation is constrained without
 rewriting the preferred size. Existing grouping still merges overlapping paint
 bounds so drawing order does not depend on same-layer compositor ordering.
 
+## Responsive media content
+
+Media starts at 260 × 392 logical pixels with an 18-pixel inset. Increasing width
+expands the artwork, title, artist and progress bar. Increasing height grows the
+artwork and moves the metadata and controls down by the same amount, preserving
+their spacing from the bottom. The transport row and fallback music icon stay
+centered. Artwork uses cover fitting: it keeps its aspect ratio and crops to the
+available rectangle. Title and artist each have a generated one-line cap and
+show an ellipsis when the available width is insufficient.
+
+The widget still shares the selected player and prepared artwork with the bar
+and media panel. Playback callbacks retain the displayed player identity;
+unavailable or pending commands have no pointer or keyboard target. The artwork
+opens the media panel even when playback controls are unavailable.
+
+During a resize, the native source keeps its original content dimensions and
+input geometry. The preview alone shows the new artwork, metadata and transport
+positions. Release commits the checked size and rebuilds the source. Neither
+previewing a resize nor an unrelated save publishes an unfinished preferred size.
+
+```sh
+lucent-cli widgets size media 420 560
+```
+
 ## Verification and remaining work
 
 Behavior checks exercise actual SDK grip selection/capture, keyboard size
@@ -83,7 +108,12 @@ restoration and unrelated saves. Synthetic Vulkan references review editor,
 preview, settled, narrow and keyboard-focus states at 1×/2×. Executed results
 belong in the measurement report.
 
+The responsive Media slice adds actual layout/input checks and six Vulkan
+fixture families for default, wide, tall, fallback, pending-command and resize
+preview states. Source preparation and executed hosted results are recorded in
+[`lucent-media-widget-polish.json`](../reports/measurements/lucent-media-widget-polish.json).
+
 VM input/display acceptance remains deferred under the user instruction. This
-does not implement per-monitor layout persistence, text reflow in every widget,
-touch resizing or settle animations. Native gesture acceptance, current RSS,
-GPU/decode peaks and measured pacing remain distinct work.
+does not add responsive layouts to every widget, touch resizing or settle
+animations. Native gesture acceptance, current RSS, GPU/decode peaks and measured
+pacing remain distinct work.

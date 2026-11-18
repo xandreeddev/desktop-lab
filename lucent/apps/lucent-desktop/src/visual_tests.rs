@@ -3,6 +3,7 @@
 mod application_actions;
 mod displays;
 mod live_previews;
+mod media_widgets;
 mod overlays;
 mod system_status;
 use crate::desktop::{Desktop, Message};
@@ -2170,6 +2171,20 @@ fn visual_regressions() {
             ("notes-unavailable", Mode::Apps, 0, 0, "", 1., 390.),
             ("menu-submenu", Mode::Apps, 0, 0, "", 1., 640.),
             ("media-loading", Mode::Apps, 0, 0, "", 1., 640.),
+            ("media-widget-default", Mode::Apps, 0, 0, "", 1., 640.),
+            ("media-widget-wide-long", Mode::Apps, 0, 0, "", 1., 640.),
+            ("media-widget-tall", Mode::Apps, 0, 0, "", 1., 640.),
+            ("media-widget-fallback", Mode::Apps, 0, 0, "", 1., 640.),
+            ("media-widget-pending", Mode::Apps, 0, 0, "", 1., 640.),
+            (
+                "media-widget-resize-preview",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                960.,
+            ),
             ("media-empty", Mode::Apps, 0, 0, "", 1., 390.),
             ("media-playing", Mode::Apps, 0, 0, "", 1., 640.),
             ("media-pending", Mode::Apps, 0, 0, "", 1., 640.),
@@ -2331,6 +2346,8 @@ fn visual_regressions() {
                 280.
             } else if name.starts_with("system-") || name.starts_with("session-") {
                 240.
+            } else if matches!(name, "media-widget-tall" | "media-widget-resize-preview") {
+                800.
             } else if name.starts_with("launcher-size-") {
                 1080.
             } else if name.starts_with("notes-") || name == "application-actions-narrow" {
@@ -3321,6 +3338,8 @@ fn visual_regressions() {
                 let mut input = Interaction::default();
                 input.synchronize(&layout.build(&tree, width, height, &input, now));
                 layout.build(&tree, width, height, &input, now)
+            } else if name.starts_with("media-widget-") {
+                media_widgets::prepare(&mut app, name, &layout, width, height, now)
             } else if name.starts_with("media-") {
                 open_media_fixture(&mut app, name);
                 let cx = ViewContext {

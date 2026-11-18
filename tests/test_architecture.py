@@ -147,10 +147,18 @@ class Boundaries(unittest.TestCase):
         self.assert_no_platform_operations(paths, ('crate::desktop', 'crate::adapters', 'crate::platform'))
 
     def test_widget_host_and_views_do_not_import_the_root_or_adapters(self):
-        paths = sources(ROOT / 'lucent/apps/lucent-desktop/src/widgets')
+        root = ROOT / 'lucent/apps/lucent-desktop/src/widgets'
+        # The artwork/input fixture implements an owned AssetPort fake. It is
+        # test-only; production widget views still cannot import that port.
+        fixture = root / 'media_layout_tests.rs'
+        paths = sources(root, ('media_layout_tests.rs',))
         self.assert_no_platform_operations(paths,
             ('crate::desktop', 'crate::adapters', 'crate::platform', 'crate::ports'))
-        for path in paths:
+        self.assertRegex((root / 'mod.rs').read_text(),
+                         r'#\[cfg\(test\)\]\s*mod media_layout_tests;')
+        self.assert_no_platform_operations([fixture],
+            ('crate::desktop', 'crate::adapters', 'crate::platform'))
+        for path in [*paths, fixture]:
             self.assertNotRegex(path.read_text(), r'\b(?:Desktop|DesktopAdapters)\b', str(path))
 
     def test_audio_child_depends_on_ports_without_the_root_or_adapter_bundle(self):

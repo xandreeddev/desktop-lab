@@ -501,6 +501,8 @@ impl Host {
 }
 
 #[cfg(test)]
+mod media_layout_tests;
+#[cfg(test)]
 mod sizing_tests;
 
 pub fn widget_size(id: &str) -> (f32, f32) {
