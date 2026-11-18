@@ -3006,7 +3006,7 @@ impl api::Application for Desktop {
             Event::Key {
                 surface: "audio",
                 key: Key::Escape,
-            } => Some(Message::Audio(crate::audio::Message::Close)),
+            } => Some(Message::Audio(self.audio.escape())),
             Event::Key {
                 surface: "audio", ..
             } => None,

@@ -713,3 +713,187 @@ fn closing_releases_an_accepted_scan_even_before_its_owned_snapshot_arrives() {
     );
     assert!(!client.open());
 }
+
+#[test]
+fn closed_bluetooth_ignores_late_radio_connection_and_forget_callbacks() {
+    let (mut client, adapter, mut effects) = client();
+    client.update(Message::Close, &mut effects);
+    let before = client.inspect();
+    effects.redraw.clear();
+    for message in [
+        Message::Tab(Tab::Radio),
+        Message::Controller(id(1)),
+        Message::Scroll(ScrollEvent { offset: 80. }),
+        Message::Control(BluetoothCommand::SetPowered {
+            adapter: id(1),
+            powered: false,
+        }),
+        Message::Control(BluetoothCommand::SetDiscovery {
+            adapter: id(1),
+            active: true,
+        }),
+        Message::Connect(id(3)),
+        Message::Pair(id(2)),
+        Message::Incoming(true),
+        Message::AskForget(id(3)),
+        Message::ConfirmForget(client.forget_revision, id(3)),
+        Message::Control(BluetoothCommand::Forget(id(3))),
+        Message::CancelConnection(BluetoothConnectionId::new(60).unwrap()),
+        Message::CancelConnectionAdmission,
+        Message::CancelPairing(pairing_id(40)),
+        Message::Back,
+        Message::Dismiss,
+    ] {
+        client.update(message, &mut effects);
+        assert_eq!(client.inspect(), before);
+        assert!(client.forget.is_none());
+        assert!(effects.tasks.is_empty());
+        assert!(effects.redraw.is_empty());
+    }
+    assert!(adapter.calls.lock().unwrap().is_empty());
+    assert!(adapter.commands.lock().unwrap().is_empty());
+}
+
+#[test]
+fn closing_retires_prompt_callbacks_while_owned_rejection_still_completes() {
+    let (mut client, adapter, mut effects) = client();
+    client.update(
+        Message::Observed(Ok(pairing_fixture(
+            BluetoothPairingPrompt::AuthorizePairing,
+        ))),
+        &mut effects,
+    );
+    client.update(Message::Close, &mut effects);
+    let rejection = effects.tasks.remove(0);
+    let before = client.inspect();
+    effects.redraw.clear();
+    for message in [
+        Message::Decision(pairing_id(41), true),
+        Message::Decision(pairing_id(41), false),
+        Message::Submit(pairing_id(41)),
+        Message::Edit(pairing_id(41), InputEdit::Insert("123".into())),
+    ] {
+        client.update(message, &mut effects);
+        assert_eq!(client.inspect(), before);
+        assert!(client.form.is_none());
+        assert!(effects.tasks.is_empty());
+        assert!(effects.redraw.is_empty());
+    }
+    client.update(rejection.run(), &mut effects);
+    assert!(!client.open());
+    assert!(client.answering.is_none());
+    assert_eq!(
+        *adapter.answers.lock().unwrap(),
+        [(pairing_id(41), "reject")]
+    );
+    assert_eq!(*adapter.calls.lock().unwrap(), ["cancel"]);
+}
+
+#[test]
+fn a_new_incoming_request_can_open_the_dismissed_panel_and_be_answered() {
+    let (mut client, adapter, mut effects) = client();
+    client.update(Message::Close, &mut effects);
+    assert!(!client.open());
+    client.update(
+        Message::Observed(Ok(pairing_fixture(
+            BluetoothPairingPrompt::AuthorizePairing,
+        ))),
+        &mut effects,
+    );
+    assert!(client.open());
+    client.update(Message::Decision(pairing_id(41), true), &mut effects);
+    let answer = effects.tasks.remove(0);
+    assert_eq!(answer.queue, crate::work::CONTROLS);
+    client.update(answer.run(), &mut effects);
+    assert_eq!(
+        *adapter.answers.lock().unwrap(),
+        [(pairing_id(41), "accept")]
+    );
+    assert!(client.open());
+}
+
+#[test]
+fn forget_confirmation_cannot_retarget_a_newer_device_prompt() {
+    let (mut client, adapter, mut effects) = client();
+    client.update(Message::AskForget(id(2)), &mut effects);
+    let stale = Message::ConfirmForget(client.forget_revision, id(2));
+    client.update(Message::AskForget(id(3)), &mut effects);
+    let current = Message::ConfirmForget(client.forget_revision, id(3));
+
+    client.update(stale, &mut effects);
+    client.update(
+        Message::ConfirmForget(client.forget_revision, id(2)),
+        &mut effects,
+    );
+    assert_eq!(client.forget, Some(id(3)));
+    assert!(effects.tasks.is_empty());
+    assert!(adapter.commands.lock().unwrap().is_empty());
+
+    client.update(current.clone(), &mut effects);
+    assert!(client.forget.is_none());
+    let task = effects.tasks.remove(0);
+    assert_eq!(task.queue, crate::work::BLUETOOTH);
+    client.update(task.run(), &mut effects);
+    client.update(current, &mut effects);
+    assert!(effects.tasks.is_empty());
+    assert_eq!(
+        *adapter.commands.lock().unwrap(),
+        [BluetoothCommand::Forget(id(3))]
+    );
+}
+
+#[test]
+fn dismissed_forget_confirmation_cannot_authorize_a_new_prompt_for_the_same_device() {
+    for dismissal in [Message::Back, Message::Tab(Tab::Radio), Message::Close] {
+        let (mut client, adapter, mut effects) = client();
+        client.update(Message::AskForget(id(3)), &mut effects);
+        let stale_revision = client.forget_revision;
+        let stale = Message::ConfirmForget(stale_revision, id(3));
+        client.update(dismissal, &mut effects);
+        assert!(client.forget.is_none());
+        client.update(Message::Open, &mut effects);
+        client.update(Message::AskForget(id(3)), &mut effects);
+        assert_ne!(client.forget_revision, stale_revision);
+
+        client.update(stale, &mut effects);
+        assert_eq!(client.forget, Some(id(3)));
+        assert!(effects.tasks.is_empty());
+        assert!(adapter.commands.lock().unwrap().is_empty());
+
+        client.update(
+            Message::ConfirmForget(client.forget_revision, id(3)),
+            &mut effects,
+        );
+        let task = effects.tasks.remove(0);
+        client.update(task.run(), &mut effects);
+        assert_eq!(
+            *adapter.commands.lock().unwrap(),
+            [BluetoothCommand::Forget(id(3))]
+        );
+    }
+}
+
+#[test]
+fn busy_bluetooth_retains_the_current_forget_confirmation() {
+    let (mut client, adapter, mut effects) = client();
+    client.update(Message::AskForget(id(3)), &mut effects);
+    let confirm = Message::ConfirmForget(client.forget_revision, id(3));
+    let power = BluetoothCommand::SetPowered {
+        adapter: id(1),
+        powered: false,
+    };
+    client.update(Message::Control(power.clone()), &mut effects);
+    let active = effects.tasks.remove(0);
+
+    client.update(confirm.clone(), &mut effects);
+    assert_eq!(client.forget, Some(id(3)));
+    assert!(effects.tasks.is_empty());
+    client.update(active.run(), &mut effects);
+    client.update(confirm, &mut effects);
+    let forget = effects.tasks.remove(0);
+    client.update(forget.run(), &mut effects);
+    assert_eq!(
+        *adapter.commands.lock().unwrap(),
+        [power, BluetoothCommand::Forget(id(3))]
+    );
+}

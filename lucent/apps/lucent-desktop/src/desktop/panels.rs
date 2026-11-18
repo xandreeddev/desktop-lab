@@ -405,6 +405,66 @@ mod tests {
     }
 
     #[test]
+    fn audio_escape_returns_from_routing_before_releasing_the_panel() {
+        use lucent_domain::{AudioDirection, AudioObjectId, AudioStream, AudioVolume};
+        let mut app = Desktop::new(crate::test_adapters::adapters());
+        let stream = AudioObjectId::new(2).unwrap();
+        let mut snapshot = crate::audio::fixture();
+        snapshot.streams.push(AudioStream {
+            id: stream,
+            name: "Fixture playback".into(),
+            application: "Fixture player".into(),
+            direction: AudioDirection::Playback,
+            device: snapshot.default_output,
+            volume: Some(AudioVolume::NORMAL),
+            volume_writable: true,
+            muted: false,
+        });
+        app.update(
+            Message::Audio(crate::audio::Message::Observed(Ok(snapshot))),
+            &mut Effects::default(),
+        );
+        app.update(open(Panel::Audio), &mut Effects::default());
+        submitted(&mut app, "audio", None);
+        app.update(
+            Message::Audio(crate::audio::Message::Tab(
+                crate::audio::panel::Tab::Applications,
+            )),
+            &mut Effects::default(),
+        );
+        app.update(
+            Message::Audio(crate::audio::Message::ChooseRoute(stream)),
+            &mut Effects::default(),
+        );
+        assert!(contains(&app.view(&context("audio")), "audio-back"));
+        let escape = || Event::Key {
+            surface: "audio",
+            key: lucent_api::Key::Escape,
+        };
+        let back = app.event(escape()).unwrap();
+        app.update(back, &mut Effects::default());
+        assert!(app.audio.open());
+        assert_eq!(app.audio.inspect()["tab"], "Apps");
+        assert!(!contains(&app.view(&context("audio")), "audio-back"));
+        let active = app
+            .surfaces()
+            .into_iter()
+            .find(|s| s.id == "audio")
+            .unwrap();
+        assert_eq!(active.keyboard, Keyboard::Exclusive);
+        let close = app.event(escape()).unwrap();
+        app.update(close, &mut Effects::default());
+        assert!(!app.audio.open());
+        let closing = app
+            .surfaces()
+            .into_iter()
+            .find(|s| s.id == "audio")
+            .unwrap();
+        assert_eq!(closing.keyboard, Keyboard::None);
+        assert_eq!(closing.pointer_input, PointerInput::None);
+    }
+
+    #[test]
     fn retargeted_panel_stays_passive_on_old_output_until_its_bar_submits() {
         use lucent_api::{DisplayOutput, OutputName};
         let mut app = Desktop::new(crate::test_adapters::adapters());

@@ -11,7 +11,7 @@ pub enum Message {
     Control(PowerCommand),
     Brightness(PowerObjectId, SliderEvent),
     Ask(PowerAction),
-    Confirm(PowerAction),
+    Confirm(u64, PowerAction),
     Back,
     Open,
     Toggle,
@@ -44,6 +44,7 @@ pub struct Power {
     close_generation: u64,
     scroll: f32,
     confirmation: Option<PowerAction>,
+    confirmation_revision: u64,
     revision: u64,
     active: Option<u64>,
     admission: Option<Admission>,
@@ -62,6 +63,7 @@ impl Power {
             close_generation: 0,
             scroll: 0.,
             confirmation: None,
+            confirmation_revision: 0,
             revision: 0,
             active: None,
             admission: None,
@@ -219,17 +221,23 @@ impl Power {
                 }
             }
             Message::Ask(action) => {
-                if !self.busy()
+                if self.open
+                    && !self.busy()
                     && self.snapshot().is_some_and(|s| {
                         lucent_usecases::power::validate_power_action(s, action).is_ok()
                     })
                 {
+                    self.confirmation_revision = self.confirmation_revision.wrapping_add(1);
                     self.confirmation = Some(action);
                     self.scroll = 0.;
                 }
             }
-            Message::Confirm(action) => {
-                if self.confirmation == Some(action) {
+            Message::Confirm(revision, action) => {
+                if self.open
+                    && !self.busy()
+                    && revision == self.confirmation_revision
+                    && self.confirmation == Some(action)
+                {
                     self.confirmation = None;
                     self.submit(PowerCommand::Session(action), effects);
                 }

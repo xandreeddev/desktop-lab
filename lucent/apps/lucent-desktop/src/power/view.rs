@@ -71,7 +71,7 @@ impl Power {
                     button(
                         action_name(action),
                         "power-confirm",
-                        Message::Confirm(action),
+                        Message::Confirm(self.confirmation_revision, action),
                         !self.busy(),
                         theme,
                     ),

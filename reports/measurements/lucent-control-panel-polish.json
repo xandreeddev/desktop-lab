@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-18",
+  "status": "implementation_ready_for_hosted_checks",
+  "scope": "Control-panel navigation, closed-scene callbacks and prompt-bound power confirmation.",
+  "changes": [
+    "Audio Escape returns from application routing before closing the panel.",
+    "Closed audio controls reject late UI callbacks while preserving global shortcuts and accepted completions.",
+    "Audio scroll state rejects nonfinite offsets.",
+    "Power confirmation identifies the exact prompt instead of only the requested action.",
+    "Closed Bluetooth panels reject late controls while retaining incoming request observation and accepted cancellation completion.",
+    "Bluetooth Forget confirmation captures its original prompt and device."
+  ],
+  "validation": {
+    "python_cases_passed": 802,
+    "catalogue_current": true,
+    "catalogue_captures": 480,
+    "rust_execution_pending": true,
+    "hosted_visuals_pending": true,
+    "native_vm_pending": true,
+    "coverage": [
+      "Audio nested Escape and root native keyboard declarations.",
+      "Audio invalid offsets, closed controls, global shortcuts and accepted completions.",
+      "Power same-action prompt replacement, closed prompts, capability retirement and duplicate confirmation.",
+      "Bluetooth closed controls, cancelled prompts, fresh incoming requests and Forget prompt replacement."
+    ],
+    "formatting_passed": true,
+    "diff_check_passed": true
+  },
+  "vm_started": false,
+  "native_accepted": false,
+  "full_polish_goal_complete": false
+}

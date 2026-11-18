@@ -84,7 +84,14 @@
       "id": "control-panels",
       "status": "in_progress",
       "behavior": "Bar controls switch panels in one click, with consistent focus, dismissal, loading, unavailable, retry and confirmation behavior.",
-      "toolkit": "Reusable panel/popover focus scopes, controls and menu behavior driven by real client requirements."
+      "toolkit": "Reusable panel/popover focus scopes, controls and menu behavior driven by real client requirements.",
+      "acceptance": [
+        "One click switches among the ordinary panels while the bar reservation and child-owned cancellation remain correct.",
+        "Escape backs out of nested controls before dismissing the panel; dismissed callbacks cannot act on a new prompt.",
+        "Loading, unavailable, retry and confirmation states retain truthful backend state and explicit authority.",
+        "Pass focused behavior tests and full hosted source/protocol/Vulkan checks; keep actual VM interactions deferred under the current user instruction."
+      ],
+      "report": "reports/measurements/lucent-control-panel-polish.json"
     },
     {
       "id": "notifications",

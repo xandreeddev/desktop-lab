@@ -68,9 +68,15 @@ fn session_actions_require_confirmation_and_never_fabricate_completion() {
     assert!(effects.tasks.is_empty());
     power.update(Message::Ask(PowerAction::Suspend), &mut effects);
     assert!(effects.tasks.is_empty());
-    power.update(Message::Confirm(PowerAction::PowerOff), &mut effects);
+    power.update(
+        Message::Confirm(power.confirmation_revision, PowerAction::PowerOff),
+        &mut effects,
+    );
     assert!(effects.tasks.is_empty());
-    power.update(Message::Confirm(PowerAction::Suspend), &mut effects);
+    power.update(
+        Message::Confirm(power.confirmation_revision, PowerAction::Suspend),
+        &mut effects,
+    );
     let task = effects.tasks.remove(0);
     assert_eq!(task.queue, crate::work::CONTROLS);
     power.update(task.run(), &mut effects);
@@ -89,6 +95,114 @@ fn session_actions_require_confirmation_and_never_fabricate_completion() {
         vec![PowerCommand::Session(PowerAction::Suspend)]
     );
 }
+
+fn confirmation_click(power: &Power) -> Message {
+    fn find(element: &Element<Message>) -> Option<Message> {
+        if element.id == "power-confirm" {
+            element.click.clone()
+        } else {
+            element.children.iter().find_map(find)
+        }
+    }
+    let theme = lucent_design::Theme::from_palette(&lucent_design::palettes()[0]);
+    find(&power.view(
+        &ViewContext {
+            surface: "power",
+            instance: None,
+            width: 640.,
+            height: 720.,
+            now: 1.,
+            density: Density::ONE,
+        },
+        theme,
+    ))
+    .expect("current enabled confirmation control")
+}
+
+#[test]
+fn retired_confirmation_cannot_authorize_a_later_identical_power_action() {
+    for retirement in ["close", "back", "unavailable"] {
+        let adapter = Arc::new(Adapter::default());
+        let mut power = Power::new(adapter.clone());
+        let mut effects = Effects::default();
+        power.update(Message::Observed(Ok(fixture())), &mut effects);
+        power.update(Message::Open, &mut effects);
+        power.update(Message::Ask(PowerAction::Suspend), &mut effects);
+        let retired = confirmation_click(&power);
+        match retirement {
+            "close" => {
+                power.update(Message::Close, &mut effects);
+                power.update(Message::Open, &mut effects);
+            }
+            "back" => power.update(Message::Back, &mut effects),
+            _ => {
+                power.update(
+                    Message::Observed(Err(DomainError::Unavailable("Owner changed".into()))),
+                    &mut effects,
+                );
+                power.update(Message::Observed(Ok(fixture())), &mut effects);
+            }
+        }
+        power.update(Message::Ask(PowerAction::Suspend), &mut effects);
+        let current = confirmation_click(&power);
+        power.update(retired, &mut effects);
+        assert!(
+            effects.tasks.is_empty(),
+            "retired {retirement} confirmation"
+        );
+        assert_eq!(power.confirmation, Some(PowerAction::Suspend));
+        assert!(adapter.0.lock().unwrap().is_empty());
+
+        power.update(current.clone(), &mut effects);
+        assert_eq!(effects.tasks.len(), 1);
+        power.update(current, &mut effects);
+        assert_eq!(effects.tasks.len(), 1, "one confirmation admits only once");
+        let task = effects.tasks.remove(0);
+        power.update(task.run(), &mut effects);
+        assert_eq!(
+            *adapter.0.lock().unwrap(),
+            vec![PowerCommand::Session(PowerAction::Suspend)]
+        );
+    }
+}
+
+#[test]
+fn hidden_power_panel_cannot_arm_or_confirm_session_actions() {
+    let adapter = Arc::new(Adapter::default());
+    let mut power = Power::new(adapter.clone());
+    let mut effects = Effects::default();
+    power.update(Message::Observed(Ok(fixture())), &mut effects);
+    power.update(Message::Ask(PowerAction::Suspend), &mut effects);
+    assert!(power.confirmation.is_none());
+    power.update(Message::Open, &mut effects);
+    power.update(Message::Ask(PowerAction::Suspend), &mut effects);
+    let confirm = confirmation_click(&power);
+    power.update(Message::Close, &mut effects);
+    power.update(Message::Ask(PowerAction::Suspend), &mut effects);
+    power.update(confirm, &mut effects);
+    assert!(power.confirmation.is_none());
+    assert!(effects.tasks.is_empty());
+    assert!(adapter.0.lock().unwrap().is_empty());
+}
+
+#[test]
+fn confirmation_revalidates_current_power_capability() {
+    let adapter = Arc::new(Adapter::default());
+    let mut power = Power::new(adapter.clone());
+    let mut effects = Effects::default();
+    power.update(Message::Observed(Ok(fixture())), &mut effects);
+    power.update(Message::Open, &mut effects);
+    power.update(Message::Ask(PowerAction::Suspend), &mut effects);
+    let confirm = confirmation_click(&power);
+    let mut revoked = fixture();
+    revoked.session = PowerCapability::Ready(vec![]);
+    power.update(Message::Observed(Ok(revoked)), &mut effects);
+    power.update(confirm, &mut effects);
+    assert!(power.confirmation.is_none());
+    assert!(effects.tasks.is_empty());
+    assert!(adapter.0.lock().unwrap().is_empty());
+}
+
 #[test]
 fn unavailable_then_late_admission_does_not_replay_or_stick_busy() {
     let adapter = Arc::new(Adapter::default());

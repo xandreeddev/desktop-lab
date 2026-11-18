@@ -42,6 +42,26 @@ impl Audio {
         }
     }
     pub fn update(&mut self, message: Message, effects: &mut Effects<Message>) {
+        // Closed panels cannot accept callbacks from their retiring scene.
+        // Global volume shortcuts and accepted command completions stay live.
+        if !self.panel.open
+            && matches!(
+                &message,
+                Message::Request(
+                    AudioCommand::SetVolume(..)
+                        | AudioCommand::SetMute(..)
+                        | AudioCommand::SetDefault(..)
+                        | AudioCommand::Route { .. }
+                ) | Message::Control(commands::Message::Retry | commands::Message::DismissFailure)
+                    | Message::Tab(_)
+                    | Message::Scroll(_)
+                    | Message::Volume(..)
+                    | Message::ChooseRoute(_)
+                    | Message::Back
+            )
+        {
+            return;
+        }
         match message {
             Message::Observed(result) => {
                 if !self.observe(result) {
@@ -81,7 +101,11 @@ impl Audio {
                 self.panel.route = None;
                 self.panel.scroll = 0.;
             }
-            Message::Scroll(event) => self.panel.scroll = event.offset,
+            Message::Scroll(event) => {
+                if event.offset.is_finite() {
+                    self.panel.scroll = event.offset.max(0.);
+                }
+            }
             Message::Volume(id, event) => {
                 if event.value.is_finite() && (0. ..=1.).contains(&event.value) {
                     self.update(
@@ -114,6 +138,13 @@ impl Audio {
     }
     pub fn open(&self) -> bool {
         self.panel.open
+    }
+    pub fn escape(&self) -> Message {
+        if self.panel.route.is_some() {
+            Message::Back
+        } else {
+            Message::Close
+        }
     }
     pub fn visible(&self) -> bool {
         self.panel.mounted
@@ -233,11 +264,136 @@ mod tests {
         assert_eq!(audio.label(), "—");
         audio.observe(Ok(fixture()));
         let mut effects = Effects::default();
+        audio.update(Message::Open, &mut effects);
         audio.update(Message::Control(commands::Message::Retry), &mut effects);
         for task in effects.tasks {
             audio.update(task.run(), &mut Effects::default());
         }
         assert!(audio.inspect()["control_error"].is_null());
+    }
+
+    fn routing_fixture() -> AudioSnapshot {
+        let mut snapshot = fixture();
+        snapshot.streams.push(AudioStream {
+            id: AudioObjectId::new(2).unwrap(),
+            name: "Playback stream".into(),
+            application: "Player".into(),
+            direction: AudioDirection::Playback,
+            device: snapshot.default_output,
+            volume: Some(AudioVolume::NORMAL),
+            volume_writable: true,
+            muted: false,
+        });
+        snapshot
+    }
+
+    #[test]
+    fn escape_leaves_routing_before_dismissing_the_audio_panel() {
+        let mut audio = Audio::new(Arc::new(crate::test_adapters::Fake::default()));
+        let mut effects = Effects::default();
+        audio.update(Message::Observed(Ok(routing_fixture())), &mut effects);
+        audio.update(Message::Open, &mut effects);
+        audio.update(Message::Tab(panel::Tab::Applications), &mut effects);
+        audio.update(
+            Message::ChooseRoute(AudioObjectId::new(2).unwrap()),
+            &mut effects,
+        );
+        audio.update(Message::Scroll(ScrollEvent { offset: 64. }), &mut effects);
+        assert!(matches!(audio.escape(), Message::Back));
+        audio.update(audio.escape(), &mut effects);
+        assert!(audio.open());
+        assert!(audio.panel.route.is_none());
+        assert_eq!(audio.panel.tab.name(), "Apps");
+        assert_eq!(audio.panel.scroll, 0.);
+        assert!(matches!(audio.escape(), Message::Close));
+        audio.update(audio.escape(), &mut effects);
+        assert!(!audio.open());
+        assert!(effects.tasks.is_empty());
+    }
+
+    #[test]
+    fn closed_audio_ignores_late_panel_callbacks_but_completes_accepted_work() {
+        let mut audio = Audio::new(Arc::new(crate::test_adapters::Fake::default()));
+        let mut effects = Effects::default();
+        let device = AudioObjectId::new(1).unwrap();
+        let stream = AudioObjectId::new(2).unwrap();
+        audio.update(Message::Observed(Ok(routing_fixture())), &mut effects);
+        audio.update(Message::Open, &mut effects);
+        audio.update(Message::Tab(panel::Tab::Applications), &mut effects);
+        audio.update(Message::ChooseRoute(stream), &mut effects);
+        audio.update(
+            Message::Request(AudioCommand::SetVolume(device, AudioVolume::NORMAL)),
+            &mut effects,
+        );
+        let accepted = effects.tasks.pop().unwrap();
+        audio.update(Message::Close, &mut effects);
+        let before = audio.inspect();
+        effects.redraw.clear();
+        for message in [
+            Message::Tab(panel::Tab::Inputs),
+            Message::Scroll(ScrollEvent { offset: 90. }),
+            Message::ChooseRoute(stream),
+            Message::Back,
+            Message::Volume(
+                device,
+                SliderEvent {
+                    value: 0.3,
+                    finished: true,
+                },
+            ),
+            Message::Request(AudioCommand::SetVolume(device, AudioVolume::NORMAL)),
+            Message::Request(AudioCommand::SetMute(device, true)),
+            Message::Request(AudioCommand::SetDefault(device)),
+            Message::Request(AudioCommand::Route { stream, device }),
+            Message::Control(commands::Message::Retry),
+            Message::Control(commands::Message::DismissFailure),
+        ] {
+            audio.update(message, &mut effects);
+            assert_eq!(audio.inspect(), before);
+            assert!(effects.tasks.is_empty());
+            assert!(effects.redraw.is_empty());
+        }
+        audio.update(accepted.run(), &mut effects);
+        assert!(!audio.commands.busy());
+        assert!(!audio.open());
+        assert!(audio.commands.error().is_none());
+        let mut changed = routing_fixture();
+        changed.devices[0].volume = AudioVolume::new(0.4).unwrap();
+        audio.update(Message::Observed(Ok(changed)), &mut effects);
+        assert_eq!(audio.label(), "40");
+    }
+
+    #[test]
+    fn global_audio_shortcuts_still_work_with_the_panel_closed() {
+        let mut audio = Audio::new(Arc::new(crate::test_adapters::Fake::default()));
+        audio.observe(Ok(fixture()));
+        for command in [
+            AudioCommand::Raise,
+            AudioCommand::Lower,
+            AudioCommand::ToggleMute,
+        ] {
+            let mut effects = Effects::default();
+            audio.update(Message::Request(command), &mut effects);
+            assert_eq!(effects.tasks.len(), 1);
+            assert!(audio.commands.busy());
+            audio.update(effects.tasks.pop().unwrap().run(), &mut effects);
+            assert!(!audio.commands.busy());
+            assert!(!audio.open());
+        }
+    }
+
+    #[test]
+    fn invalid_scroll_offsets_cannot_break_the_audio_view() {
+        let mut audio = Audio::new(Arc::new(crate::test_adapters::Fake::default()));
+        let mut effects = Effects::default();
+        audio.update(Message::Open, &mut effects);
+        audio.update(Message::Scroll(ScrollEvent { offset: 25. }), &mut effects);
+        for offset in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            audio.update(Message::Scroll(ScrollEvent { offset }), &mut effects);
+            assert_eq!(audio.panel.scroll, 25.);
+        }
+        audio.update(Message::Scroll(ScrollEvent { offset: -1. }), &mut effects);
+        assert_eq!(audio.panel.scroll, 0.);
     }
 
     #[test]

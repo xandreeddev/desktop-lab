@@ -38,7 +38,7 @@ pub enum Message {
     CancelPairing(BluetoothPairingId),
     Finished(u64, bool, Result<Outcome>),
     AskForget(BluetoothObjectId),
-    ConfirmForget,
+    ConfirmForget(u64, BluetoothObjectId),
     Back,
     Dismiss,
     Ignore,
@@ -84,6 +84,7 @@ pub struct Bluetooth {
     scan_stops: BTreeSet<BluetoothObjectId>,
     form: Option<Form>,
     forget: Option<BluetoothObjectId>,
+    forget_revision: u64,
     error: String,
     notice: String,
 }
@@ -111,6 +112,7 @@ impl Bluetooth {
             scan_stops: BTreeSet::new(),
             form: None,
             forget: None,
+            forget_revision: 0,
             error: String::new(),
             notice: String::new(),
         }
@@ -378,6 +380,22 @@ impl Bluetooth {
         });
     }
     pub fn update(&mut self, message: Message, effects: &mut Effects<Message>) {
+        // Closing retires the scene's user actions, including approvals and
+        // radio changes. Observations may still open a fresh incoming prompt,
+        // and accepted work must finish its child-owned cancellation lifecycle.
+        if !self.open
+            && !matches!(
+                &message,
+                Message::Observed(_)
+                    | Message::Open
+                    | Message::Toggle
+                    | Message::Close
+                    | Message::Closed(_)
+                    | Message::Finished(..)
+            )
+        {
+            return;
+        }
         let before = self.status();
         match message {
             Message::Observed(result) => {
@@ -692,17 +710,31 @@ impl Bluetooth {
                 }
             }
             Message::AskForget(id) => {
-                if self
-                    .snapshot()
-                    .is_some_and(|s| s.devices.iter().any(|d| d.id == id))
+                if !self.ordinary_busy()
+                    && self
+                        .snapshot()
+                        .is_some_and(|s| s.devices.iter().any(|d| d.id == id))
                 {
-                    self.forget = Some(id);
-                    self.scroll = 0.;
+                    if let Some(revision) = self.forget_revision.checked_add(1) {
+                        self.forget_revision = revision;
+                        self.forget = Some(id);
+                        self.scroll = 0.;
+                    } else {
+                        self.error =
+                            "Bluetooth confirmation limit reached; restart the desktop".into();
+                    }
                 }
             }
-            Message::ConfirmForget => {
-                if let Some(id) = self.forget.take() {
+            Message::ConfirmForget(revision, id) => {
+                if !self.ordinary_busy()
+                    && revision == self.forget_revision
+                    && self.forget == Some(id)
+                {
+                    let before = self.revision;
                     self.update(Message::Control(BluetoothCommand::Forget(id)), effects);
+                    if before != self.revision {
+                        self.forget = None;
+                    }
                 }
             }
             Message::Back => self.forget = None,

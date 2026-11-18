@@ -269,7 +269,7 @@ impl Bluetooth {
                             button(
                                 "Forget device",
                                 "bluetooth-forget-confirm",
-                                Message::ConfirmForget,
+                                Message::ConfirmForget(self.forget_revision, id),
                                 !self.ordinary_busy(),
                                 theme,
                             )

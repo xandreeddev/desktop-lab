@@ -306,7 +306,7 @@ fn shell_hide_revokes_power_confirmation_instead_of_executing_it() {
     );
     app.update(Message::DismissPanels, &mut effects);
     app.update(
-        Message::Power(crate::power::Message::Confirm(PowerAction::Suspend)),
+        Message::Power(crate::power::Message::Confirm(1, PowerAction::Suspend)),
         &mut effects,
     );
     assert!(!app.power.open());

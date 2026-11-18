@@ -2982,14 +2982,14 @@ fn visual_regressions() {
                 use lucent_domain::{
                     BluetoothPairingCode as Code, BluetoothPairingPrompt as P, BluetoothServiceId,
                 };
+                let mut effects = Effects::default();
+                app.update(Message::Bluetooth(B::Open), &mut effects);
                 if name.starts_with("bluetooth-radio") {
                     app.update(
                         Message::Bluetooth(B::Tab(crate::bluetooth::Tab::Radio)),
-                        &mut Effects::default(),
+                        &mut effects,
                     );
                 }
-                let mut effects = Effects::default();
-                app.update(Message::Bluetooth(B::Open), &mut effects);
                 if name != "bluetooth-loading" {
                     let snapshot = match name {
                         "bluetooth-unavailable" => Err(lucent_domain::DomainError::Unavailable(

@@ -123,6 +123,23 @@ The command does not hide bars or desktop widgets, dismiss notifications, stop
 live playback, save preferences or alter lock/login/polkit authority. Those
 remain separate actions and clients.
 
+Audio Escape follows the visible hierarchy: it returns from an application's
+output chooser to the application list, then closes the panel on the next press.
+Closing retires callbacks from the old audio controls while global volume keys,
+backend observations and previously accepted command completions continue.
+Invalid scroll offsets cannot enter the controlled scroll state.
+
+Power confirmation is bound to the particular prompt that produced its button.
+Backing out, closing or replacing a prompt retires that confirmation, including
+when a later prompt requests the same action. A closed panel cannot create or
+confirm a session-action prompt.
+
+Bluetooth likewise drops callbacks from closed controls while continuing its
+owned rejection/cancellation work. A new incoming pairing request can open a
+fresh prompt. Forget confirmation captures both its prompt revision and device,
+so a previous button cannot forget a newly selected device or a later prompt
+for the same device.
+
 ## Validation
 
 Tests cover every ordered pair of the eleven panels, repeated updates, pending tray work,
