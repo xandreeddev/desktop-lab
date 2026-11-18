@@ -379,8 +379,15 @@ impl Center {
                 .filter(|n| !self.snapshot.do_not_disturb || n.critical)
                 .take(limit.min(token::TOAST_LIMIT as usize))
                 .map(|note| {
-                    let card = self.card(note, false, false, t, cx.now);
+                    let has_images = self.has_images(note);
+                    let mut card = self.card(note, false, false, t, cx.now);
                     if let Some(target) = note.target() {
+                        if !has_images {
+                            // The viewport owns the plain toast's surface and
+                            // shadow, so clipping content does not cut off the
+                            // shadow or expose a differently colored gutter.
+                            card.style.shadow = None;
+                        }
                         let viewport = t
                             .scroll(
                                 ScrollSpec::new(
@@ -398,12 +405,14 @@ impl Center {
                             .padding(token::IMAGE_VIEWPORT_PADDING)
                             .width(Length::Fill)
                             .radius(radius::PANEL);
-                        if self.has_images(note) {
+                        if has_images {
                             viewport.height(Length::Fixed(card_height.min(room)))
                         } else {
                             viewport
                                 .height(Length::Shrink)
                                 .max_height(card_height.min(room))
+                                .background(t.surface)
+                                .shadow()
                         }
                     } else {
                         card

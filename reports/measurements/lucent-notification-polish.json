@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-11-18",
-  "status": "implementation_ready_for_hosted_checks",
+  "status": "hosted_behavior_passed_visual_refinement_pending",
   "scope": "Notification toast reachability, bounded metadata and reconciled history navigation.",
   "changes": [
     "Plain toasts use naturally sized scroll viewports bounded by available screen room.",
@@ -15,7 +15,7 @@
     "design_token_cases_passed": 592,
     "app_icon_cases_passed": 58,
     "diff_check_passed": true,
-    "rust_execution_pending": true,
+    "rust_execution_pending": false,
     "hosted_visuals_pending": true,
     "catalogue_refresh_pending": false,
     "native_vm_pending": true,
@@ -43,6 +43,24 @@
         "menu-light-populated-narrow-1x"
       ],
       "promoted": true
+    },
+    "first_hosted_review": {
+      "source_commit": "a6362fd653f42ea353bd918cb390233af82b9a8b",
+      "run_id": 44267955556,
+      "job_id": 134677077870,
+      "strict_clippy_passed": true,
+      "workspace_tests_passed": true,
+      "controlled_service_suites_passed": true,
+      "visual_artifact_id": 14412081657,
+      "visual_archive_sha256": "dbb26964b2298673d4c79d4ce8e842a44333ab9ed1e94c23cffc3cd6962a65d6",
+      "vulkan_cases": 848,
+      "unchanged_cases_passed": 828,
+      "changed_plain_toast_cases": 4,
+      "new_fixture_cases": 16,
+      "all_case_pngs_crc_verified": true,
+      "all_differences_confined_to_notifications": true,
+      "baseline_promotion_approved": false,
+      "visual_issue": "Plain toast viewport exposed a contrasting gutter and clipped the card shadow. Move surface/shadow ownership to the plain viewport and review fresh output before accepting baselines."
     }
   },
   "vm_started": false,
