@@ -270,13 +270,18 @@ impl Component for Center {
                 }) {
                     self.link_opening = None;
                 }
-                if self
-                    .selected_group
-                    .as_ref()
-                    .is_some_and(|key| !self.groups().iter().any(|g| &g.key == key))
-                {
-                    self.selected_group = None;
-                    self.page = 0;
+                if let Some(key) = &self.selected_group {
+                    let count = self
+                        .groups()
+                        .iter()
+                        .find(|g| &g.key == key)
+                        .map(|group| group.entries.len());
+                    if let Some(count) = count {
+                        self.page = self.page.min(count.saturating_sub(1));
+                    } else {
+                        self.selected_group = None;
+                        self.page = 0;
+                    }
                 }
                 self.ready = true;
             }

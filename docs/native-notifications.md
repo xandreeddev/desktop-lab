@@ -129,10 +129,21 @@ opens its details, and selecting it again collapses it. Previous/Next stays
 within that group's entries. All groups/details use the SDK's controlled scroll
 API, including wheel, thumb capture and keyboard reveal.
 
-Toasts retain compact bodies. History details allow a larger bounded body layout
-inside the scroll viewport. The design system supplies margins, radii, padding,
-row and panel sizes, typography, colors and motion curves. Storage policy values
-are not visual design tokens.
+Toasts grow with their content up to the generated `max_card_height` token,
+further constrained by the available output space. A short notice stays compact;
+a long notice keeps its lower content and actions reachable through the SDK's
+controlled scroll viewport. The viewport uses intrinsic content measurement with
+`Element::max_height`, rather than reserving the full height for every toast.
+The client still owns scroll offsets and retires them with the notification
+version.
+
+The notification recipe limits application names to `app_lines` (1), summaries
+to `title_lines` (2), compact bodies to `body_lines` (3), and action labels to
+`action_lines` (2). Text wraps using framework measurement within the available
+width. History details allow a larger bounded body layout inside their scroll
+viewport. The design system supplies margins, radii, padding, row and panel
+sizes, typography, colors and motion curves. Storage policy values are not
+visual design tokens.
 
 Opening/closing uses the framework's `Motion` with the client's supplied time.
 `Desktop::animating` requests compositor-paced work only while it is active.

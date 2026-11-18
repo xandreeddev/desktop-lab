@@ -365,8 +365,10 @@
   --component-notification-margin: var(--space-lg);
   --component-notification-padding: var(--space-lg);
   --component-notification-gap: var(--space-sm);
+  --component-notification-app-lines: 1;
   --component-notification-title-lines: 2;
   --component-notification-body-lines: 3;
+  --component-notification-action-lines: 2;
   --component-notification-toast-limit: 3;
   --component-notification-max-card-height: 320px;
   --component-notification-group-height: var(--component-input-height);

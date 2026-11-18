@@ -82,7 +82,7 @@
     },
     {
       "id": "control-panels",
-      "status": "in_progress",
+      "status": "hosted_validation_in_progress",
       "behavior": "Bar controls switch panels in one click, with consistent focus, dismissal, loading, unavailable, retry and confirmation behavior.",
       "toolkit": "Reusable panel/popover focus scopes, controls and menu behavior driven by real client requirements.",
       "acceptance": [
@@ -95,9 +95,17 @@
     },
     {
       "id": "notifications",
-      "status": "queued",
+      "status": "in_progress",
       "behavior": "Toasts and history have readable content, reachable actions, reliable DND and grouping, safe links and consistent keyboard navigation.",
-      "toolkit": "Rich text, image preparation, scrolling, focus scopes and lifetimes."
+      "toolkit": "Optional maximum outer height and intrinsically sized bounded scroll viewports; desktop-owned toast/history state and limits.",
+      "report": "reports/measurements/lucent-notification-polish.json",
+      "acceptance": [
+        "Short plain toasts retain natural height while long content keeps final actions reachable on short screens.",
+        "App names and action labels obey token line limits at narrow widths; history navigation reconciles a shrinking group before Previous/Next.",
+        "The generic bounded viewport is exercised through an independent scroll-list consumer, including keyboard reveal and pointer activation.",
+        "Review hosted production Vulkan output before accepting intentional notification changes and new narrow/short fixtures.",
+        "Pass full hosted source/protocol/visual checks; actual VM interaction remains deferred under the current user instruction."
+      ]
     },
     {
       "id": "desktop-utilities",

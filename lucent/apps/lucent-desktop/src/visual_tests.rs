@@ -1864,6 +1864,34 @@ fn visual_regressions() {
             ("bar-narrow", Mode::Apps, 9, 0, "", 1., 390.),
             ("dock", Mode::Apps, 9, 0, "", 1., 640.),
             ("notification", Mode::Apps, 0, 0, "", 1., 640.),
+            ("notification-toast-small", Mode::Apps, 0, 0, "", 1., 390.),
+            (
+                "notification-toast-small-last",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                390.,
+            ),
+            (
+                "notification-toast-metadata",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                320.,
+            ),
+            (
+                "notification-history-metadata",
+                Mode::Apps,
+                0,
+                0,
+                "",
+                1.,
+                320.,
+            ),
             ("notification-history", Mode::Apps, 0, 0, "", 1., 390.),
             ("notification-rich", Mode::Apps, 0, 0, "", 1., 640.),
             ("notification-image-ready", Mode::Apps, 0, 0, "", 1., 390.),
@@ -2245,6 +2273,8 @@ fn visual_regressions() {
                 lucent_design::component::panel::BAR_HEIGHT
             } else if name == "notification-image-small" {
                 320.
+            } else if name.starts_with("notification-toast-small") {
+                280.
             } else if name.starts_with("launcher-size-") {
                 1080.
             } else if name.starts_with("notes-") || name == "application-actions-narrow" {
@@ -3369,6 +3399,39 @@ fn visual_regressions() {
             } else if name.starts_with("notification") {
                 app.notifications.update(crate::notifications::Message::Snapshot(Ok(lucent_domain::NotificationSnapshot {active:vec![lucent_domain::Notification {id:1,revision:1,received_unix_ms:0,desktop_entry:None,app:"Lucent fixture".into(),summary:"A notification rendered by our framework".into(),body:"Shared design tokens, measured text wrapping, native actions and keyboard focus.".into(),image:None,actions:vec![lucent_domain::NotificationAction {id:"default".into(),label:"Open fixture".into()}],critical:false,resident:false,transient:false,timeout_ms:0}],..Default::default()})), &mut Effects::default());
                 app.notifications.ready = true;
+                if name.starts_with("notification-toast-small")
+                    || matches!(
+                        name,
+                        "notification-toast-metadata" | "notification-history-metadata"
+                    )
+                {
+                    let mut snapshot = app.notifications.snapshot.clone();
+                    let note = &mut snapshot.active[0];
+                    note.revision = 4;
+                    note.app =
+                        "Calendar and team planning notifications with a long application name"
+                            .into();
+                    note.summary = "The planning meeting has moved to a different room and needs your response".into();
+                    note.body = if name.starts_with("notification-toast-small") {
+                        "An ordinary notification without images can still exceed the available height on a small output. Its action must remain reachable. ".repeat(8)
+                    } else {
+                        "The invitation includes an updated location and a revised agenda.".into()
+                    };
+                    note.actions = vec![
+                        lucent_domain::NotificationAction {
+                            id: "default".into(),
+                            label: "Review the revised invitation and confirm participation".into(),
+                        },
+                        lucent_domain::NotificationAction {
+                            id: "later".into(),
+                            label: "Remind me later".into(),
+                        },
+                    ];
+                    app.notifications.update(
+                        crate::notifications::Message::Snapshot(Ok(snapshot)),
+                        &mut Effects::default(),
+                    );
+                }
                 if name.starts_with("notification-rich") {
                     let mut snapshot = app.notifications.snapshot.clone();
                     snapshot.active[0].revision = 2;
@@ -3432,6 +3495,7 @@ fn visual_regressions() {
                 }
                 if name != "notification"
                     && name != "notification-history"
+                    && !name.starts_with("notification-toast-")
                     && name != "notification-image-toast"
                     && name != "notification-image-small"
                 {
@@ -3481,6 +3545,10 @@ fn visual_regressions() {
                             .update(Notify::Group("name:Lucent fixture".into()), &mut effects);
                     }
                     app.notifications.update(Notify::Show, &mut effects);
+                    if name == "notification-history-metadata" {
+                        let group = format!("name:{}", app.notifications.snapshot.active[0].app);
+                        app.notifications.update(Notify::Group(group), &mut effects);
+                    }
                     if name.starts_with("notification-image") {
                         app.notifications
                             .update(Notify::Group("name:Lucent fixture".into()), &mut effects);
@@ -3510,6 +3578,15 @@ fn visual_regressions() {
                     app.notifications.update(
                         crate::notifications::Message::ToastScroll(
                             lucent_domain::NotificationTarget::new(1, 3).unwrap(),
+                            ScrollEvent { offset: 10000. },
+                        ),
+                        &mut Effects::default(),
+                    );
+                }
+                if name == "notification-toast-small-last" {
+                    app.notifications.update(
+                        crate::notifications::Message::ToastScroll(
+                            lucent_domain::NotificationTarget::new(1, 4).unwrap(),
                             ScrollEvent { offset: 10000. },
                         ),
                         &mut Effects::default(),
@@ -3825,6 +3902,23 @@ fn visual_regressions() {
                     "{name}: {id} is clipped"
                 );
             };
+            if matches!(
+                name,
+                "notification-toast-small-last"
+                    | "notification-toast-metadata"
+                    | "notification-history-metadata"
+            ) {
+                assert_visible("notification-action-1-4-0");
+                assert_visible("notification-next-action-1");
+            }
+            if matches!(
+                name,
+                "notification-toast-small"
+                    | "notification-toast-metadata"
+                    | "notification-history-metadata"
+            ) {
+                assert_visible("notification-dismiss-1-4");
+            }
             if name.starts_with("live-wallpaper-policy") {
                 assert_visible("live-policy-battery");
                 assert_visible("live-policy-fullscreen");

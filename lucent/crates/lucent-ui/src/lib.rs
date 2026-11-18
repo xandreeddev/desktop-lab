@@ -120,6 +120,19 @@ impl<M> Default for Scene<M> {
 pub struct Layout {
     fonts: Arc<Vec<crate::text::Font>>,
 }
+struct ScrollContent {
+    width: f32,
+    intrinsic_width: f32,
+    height: f32,
+}
+fn height_limit(style: &Style) -> Option<f32> {
+    style
+        .max_height
+        .filter(|value| value.is_finite() && *value >= 0.)
+}
+fn capped_height(style: &Style, height: f32) -> f32 {
+    height_limit(style).map_or(height, |limit| height.min(limit))
+}
 impl Layout {
     pub fn new(fonts: Arc<Vec<crate::text::Font>>) -> Self {
         Self { fonts }
@@ -208,6 +221,21 @@ impl Layout {
         }
         sizes
     }
+    /// The same gutter-adjusted width drives intrinsic height, scroll range and
+    /// placement. Text must wrap before choosing a bounded natural viewport.
+    fn scroll_content<M>(&self, e: &Element<M>, inner: (f32, f32)) -> ScrollContent {
+        let width = (inner.0 - scroll::gutter(e.style.scroll, inner.0)).max(0.);
+        let (intrinsic_width, height) = e
+            .children
+            .first()
+            .map(|child| self.measure(child, (width, inner.1)))
+            .unwrap_or((0., 0.));
+        ScrollContent {
+            width,
+            intrinsic_width,
+            height,
+        }
+    }
     fn measure<M>(&self, e: &Element<M>, available: (f32, f32)) -> (f32, f32) {
         let px = e.style.padding.horizontal * 2.;
         let py = e.style.padding.vertical * 2.;
@@ -219,8 +247,13 @@ impl Layout {
             },
             available.1,
         );
-        let children =
-            self.measure_children(e, ((available.0 - px).max(0.), (available.1 - py).max(0.)));
+        let inner = ((available.0 - px).max(0.), (available.1 - py).max(0.));
+        let capped_scroll = matches!(e.kind, Kind::Scroll(_)) && height_limit(&e.style).is_some();
+        let children = if capped_scroll {
+            vec![]
+        } else {
+            self.measure_children(e, inner)
+        };
         let n = children.len();
         let gaps = gap * n.saturating_sub(1) as f32;
         let content = match &e.kind {
@@ -287,6 +320,13 @@ impl Layout {
                         + gap * rows.saturating_sub(1) as f32,
                 )
             }
+            Kind::Scroll(_) if capped_scroll => {
+                let content = self.scroll_content(e, inner);
+                (
+                    content.intrinsic_width + scroll::gutter(e.style.scroll, inner.0),
+                    content.height,
+                )
+            }
             Kind::Scroll(_) | Kind::Stack => (
                 children.iter().map(|c| c.0).fold(0., f32::max),
                 children.iter().map(|c| c.1).fold(0., f32::max),
@@ -300,7 +340,10 @@ impl Layout {
         };
         (
             resolve(e.style.width, content.0, available.0, px).max(0.),
-            resolve(e.style.height, content.1, available.1, py).max(0.),
+            capped_height(
+                &e.style,
+                resolve(e.style.height, content.1, available.1, py).max(0.),
+            ),
         )
     }
     pub fn build<M: Clone>(
@@ -349,6 +392,7 @@ impl Layout {
         focus_clips: &Arc<[FocusClip]>,
         path: &str,
     ) {
+        let rect = Rect::new(rect.x, rect.y, rect.w, capped_height(&e.style, rect.h));
         let id = if e.id.is_empty() {
             path.to_owned()
         } else {
@@ -415,18 +459,14 @@ impl Layout {
         } else {
             None
         };
+        let mut scroll_content =
+            matches!(e.kind, Kind::Scroll(_)).then(|| self.scroll_content(e, (inner.w, inner.h)));
         let scroll_hit = match &e.kind {
             Kind::Scroll(spec) => e.scroll.as_ref().map(|callback| {
-                let width = (inner.w - scroll::gutter(e.style.scroll, inner.w)).max(0.);
-                let height = e
-                    .children
-                    .first()
-                    .map(|child| self.measure(child, (width, inner.h)).1)
-                    .unwrap_or(0.);
                 Arc::new(ScrollHit::new(
                     id.clone(),
                     inner,
-                    height,
+                    scroll_content.as_ref().unwrap().height,
                     *spec,
                     e.style.scroll,
                     callback.clone(),
@@ -726,8 +766,15 @@ impl Layout {
         }
         if let Some(scroll) = scroll_hit {
             if let Some(child) = e.children.first() {
-                let width = (inner.w - scroll::gutter(e.style.scroll, inner.w)).max(0.);
-                let height = self.measure(child, (width, inner.h)).1.max(inner.h);
+                let content = scroll_content
+                    .get_or_insert_with(|| self.scroll_content(e, (inner.w, inner.h)));
+                let width = content.width;
+                let height = if e.style.height == Length::Shrink && height_limit(&e.style).is_some()
+                {
+                    content.height
+                } else {
+                    content.height.max(inner.h)
+                };
                 let mut ancestors = scrolls.to_vec();
                 ancestors.push(scroll.clone());
                 let mut clips = child_focus_clips.to_vec();
@@ -780,7 +827,7 @@ impl Layout {
                         / count.max(1) as f32;
                 for (child, size) in e.children.iter().zip(&mut measured) {
                     if child.style.height == Length::Fill {
-                        size.1 = height;
+                        size.1 = capped_height(&child.style, height);
                     }
                 }
             }
@@ -1635,6 +1682,73 @@ impl<M: Clone> Interaction<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn maximum_height_caps_intrinsic_fixed_and_allocated_fill_boxes() {
+        let layout = Layout::new(Arc::new(vec![]));
+        let input = Interaction::default();
+        for height in [Length::Shrink, Length::Fixed(100.)] {
+            let box_tree = Element::column(vec![Element::empty().size(20., 80.)])
+                .padding(8.)
+                .height(height)
+                .max_height(40.)
+                .on_click(())
+                .id("limited");
+            let scene = layout.build(
+                &Element::stack(vec![box_tree]).fill(),
+                200.,
+                200.,
+                &input,
+                0.,
+            );
+            assert_eq!(
+                scene.hits[0].rect.h, 40.,
+                "padding belongs inside the maximum"
+            );
+        }
+        let column = Element::column(vec![
+            Element::empty().size(20., 20.),
+            Element::empty()
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .max_height(30.)
+                .on_click(())
+                .id("limited"),
+            Element::empty().fill().on_click(()).id("remaining"),
+        ])
+        .fill();
+        let scene = layout.build(&column, 200., 200., &input, 0.);
+        let limited = scene.hits.iter().find(|hit| hit.id == "limited").unwrap();
+        let remaining = scene.hits.iter().find(|hit| hit.id == "remaining").unwrap();
+        assert_eq!(limited.rect, Rect::new(0., 20., 200., 30.));
+        assert_eq!(remaining.rect, Rect::new(0., 50., 200., 90.));
+    }
+    #[test]
+    fn direct_style_limits_reject_invalid_values_and_zero_removes_visible_input() {
+        let layout = Layout::new(Arc::new(vec![]));
+        for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.] {
+            let mut child = Element::empty().size(40., 60.).on_click(());
+            child.style.max_height = Some(value);
+            let scene = layout.build(
+                &Element::stack(vec![child]).fill(),
+                100.,
+                100.,
+                &Interaction::default(),
+                0.,
+            );
+            assert_eq!(scene.hits[0].rect.h, 60.);
+        }
+        let scene = layout.build(
+            &Element::stack(vec![
+                Element::empty().size(40., 60.).max_height(0.).on_click(()),
+            ])
+            .fill(),
+            100.,
+            100.,
+            &Interaction::default(),
+            0.,
+        );
+        assert!(scene.hits.iter().all(|hit| !hit.contains(20., 0.)));
+    }
     #[test]
     fn panel_barrier_hover_preserves_surface_color_and_child_action_feedback() {
         let panel_color = Color::hex(0x181818);

@@ -2334,6 +2334,7 @@ version = "0.1.0"
 dependencies = [
  "lucent-api",
  "lucent-design",
+ "lucent-ui",
  "lucent-wayland",
 ]
 

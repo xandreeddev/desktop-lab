@@ -227,6 +227,186 @@ mod tests {
         };
         *value
     }
+    fn bounded_tree(count: usize, limit: f32, offset: f32) -> Element<Message> {
+        Element::stack(vec![
+            Element::scroll(
+                ScrollSpec::new(offset, 40.).unwrap(),
+                content(count),
+                |event| Message::Scroll(event.offset),
+            )
+            .width(Length::Fixed(200.))
+            .max_height(limit)
+            .padding(8.)
+            .id("list"),
+        ])
+        .fill()
+    }
+    #[test]
+    fn bounded_natural_viewport_shrinks_short_content_and_reveals_the_last_action() {
+        let layout = Layout::new(Arc::new(vec![]));
+        let mut input = Interaction::default();
+        let short = layout.build(&bounded_tree(1, 100., 0.), 240., 400., &input, 0.);
+        let list = short.hits.iter().find(|hit| hit.id == "list").unwrap();
+        assert_eq!(list.rect.h, 56.); // One 40px row plus the viewport's padding.
+        assert_eq!(list.scroll.as_ref().unwrap().maximum, 0.);
+        assert!(input.scroll(&short, 20., 80., 1.).is_none());
+
+        let tall = layout.build(&bounded_tree(10, 100., 0.), 240., 400., &input, 0.);
+        input.synchronize(&tall);
+        let list = tall.hits.iter().find(|hit| hit.id == "list").unwrap();
+        assert_eq!(list.rect.h, 100.);
+        assert_eq!(list.scroll.as_ref().unwrap().maximum, 352.);
+        input.focus = Some("list".into());
+        let end = offset(input.key(&tall, &Key::End));
+        assert_eq!(end, 352.);
+        let bottom = layout.build(&bounded_tree(10, 100., end), 240., 400., &input, 0.);
+        input.synchronize(&bottom);
+        let action = bottom.hits.iter().find(|hit| hit.id == "row-9").unwrap();
+        assert_eq!(action.rect.intersect(action.clip.bounds).h, action.rect.h);
+        let (x, y) = (action.rect.x + 20., action.rect.y + action.rect.h / 2.);
+        input.press(&bottom, x, y);
+        assert_eq!(input.release(x, y), Some(Message::Click(9)));
+
+        input = Interaction::default();
+        input.synchronize(&tall);
+        assert_eq!(input.key(&tall, &Key::BackTab), vec![Message::Scroll(352.)]);
+        assert_eq!(input.focus.as_deref(), Some("row-9"));
+    }
+    #[test]
+    fn bounded_natural_viewport_measures_wrapping_at_the_actual_gutter_width() {
+        let font = crate::text::Font::from_bytes(
+            include_bytes!("../../../apps/lucent-desktop/assets/LucentSans.ttf").as_slice(),
+            Default::default(),
+        )
+        .unwrap();
+        let label = "MMMM MMMM";
+        let text_width = crate::text::width(&font, label, 20.);
+        let gutter = crate::text::width(&font, "MMMM", 20.) / 2.;
+        let line_height = crate::text::line_metrics(&font, 20.).height;
+        let layout = Layout::new(Arc::new(vec![font]));
+        let list = Element::scroll(
+            ScrollSpec::new(0., 40.).unwrap(),
+            Element::text(label)
+                .font(20.)
+                .width(Length::Fill)
+                .wrap(10)
+                .on_click(Message::Click(0))
+                .id("wrapped"),
+            |event| Message::Scroll(event.offset),
+        )
+        .width(Length::Fixed(text_width + 16.))
+        .max_height(200.)
+        .padding(8.)
+        .scroll_style(ScrollStyle {
+            gutter,
+            ..Default::default()
+        })
+        .id("list");
+        let scene = layout.build(
+            &Element::stack(vec![list]).fill(),
+            400.,
+            400.,
+            &Interaction::default(),
+            0.,
+        );
+        let scroll = scene
+            .hits
+            .iter()
+            .find_map(|hit| hit.scroll.as_ref())
+            .unwrap();
+        let content = scene.hits.iter().find(|hit| hit.id == "wrapped").unwrap();
+        assert_eq!(scroll.viewport.h, line_height * 2.);
+        assert_eq!(content.rect.h, scroll.viewport.h);
+        assert_eq!(
+            scroll.maximum, 0.,
+            "wrapping must not invent overflow in a natural viewport"
+        );
+        assert_eq!(
+            content.rect.intersect(content.clip.bounds).h,
+            content.rect.h
+        );
+    }
+    #[test]
+    fn capped_scroll_intrinsic_width_includes_gutter_and_short_content_is_not_stretched() {
+        let layout = Layout::new(Arc::new(vec![]));
+        let list = Element::scroll(
+            ScrollSpec::new(0., 40.).unwrap(),
+            Element::empty()
+                .size(160., 40.)
+                .on_click(Message::Click(0))
+                .id("card"),
+            |event| Message::Scroll(event.offset),
+        )
+        .max_height(100.)
+        .padding(8.)
+        .id("list");
+        let scene = layout.build(
+            &Element::stack(vec![list.clone()]).fill(),
+            240.,
+            400.,
+            &Interaction::default(),
+            0.,
+        );
+        let viewport = scene.hits.iter().find(|hit| hit.id == "list").unwrap();
+        assert_eq!(viewport.rect, Rect::new(0., 0., 188., 56.));
+        let content = scene.hits.iter().find(|hit| hit.id == "card").unwrap();
+        assert_eq!(content.rect, Rect::new(8., 8., 160., 40.));
+
+        // A root receives its host allocation. The explicit capped Shrink path
+        // still keeps the card natural inside a larger allocated viewport.
+        let scene = layout.build(&list, 240., 400., &Interaction::default(), 0.);
+        assert_eq!(
+            scene
+                .hits
+                .iter()
+                .find(|hit| hit.id == "list")
+                .unwrap()
+                .rect
+                .h,
+            100.
+        );
+        assert_eq!(
+            scene
+                .hits
+                .iter()
+                .find(|hit| hit.id == "card")
+                .unwrap()
+                .rect
+                .h,
+            40.
+        );
+    }
+    #[test]
+    fn bounded_scroll_resize_retires_thumb_capture_and_mapping_keeps_current_events() {
+        let layout = Layout::new(Arc::new(vec![]));
+        let mut input = Interaction::default();
+        let original = layout.build(&bounded_tree(10, 100., 0.), 240., 400., &input, 0.);
+        input.synchronize(&original);
+        let scroll = original
+            .hits
+            .iter()
+            .find_map(|hit| hit.scroll.as_ref())
+            .unwrap();
+        let (x, y) = (
+            scroll.thumb.x + scroll.thumb.w / 2.,
+            scroll.thumb.y + scroll.thumb.h / 2.,
+        );
+        assert_eq!(input.press(&original, x, y), Some(Message::Scroll(0.)));
+        let resized = layout.build(&bounded_tree(10, 160., 0.), 240., 400., &input, 0.);
+        input.synchronize(&resized);
+        assert!(input.release(x, 300.).is_none());
+
+        let mapped = bounded_tree(10, 100., 0.).map(|message| match message {
+            Message::Scroll(value) => Message::Outer(value),
+            message => message,
+        });
+        let mapped = layout.build(&mapped, 240., 400., &input, 0.);
+        input.synchronize(&mapped);
+        assert_eq!(
+            input.scroll(&mapped, 20., 20., 1.),
+            Some(vec![Message::Outer(40.)])
+        );
+    }
     #[test]
     fn scroll_bursts_clamp_and_clipping_matches_pointer_hits() {
         let mut input = Interaction::default();

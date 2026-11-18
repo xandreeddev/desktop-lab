@@ -7,3 +7,5 @@ license.workspace = true
 lucent-wayland = { path = "../../crates/lucent-wayland" }
 lucent-api = { path = "../../crates/lucent-api" }
 lucent-design = { path = "../../crates/lucent-design" }
+[dev-dependencies]
+lucent-ui = { path = "../../crates/lucent-ui" }

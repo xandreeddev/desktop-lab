@@ -169,6 +169,10 @@ impl Default for Shadow {
 pub struct Style {
     pub width: Length,
     pub height: Length,
+    /// Maximum outer height, including padding. Finite nonnegative values cap
+    /// the resolved height; invalid values are ignored. A capped Fill share
+    /// does not redistribute its unused space among sibling Fill elements.
+    pub max_height: Option<f32>,
     pub padding: Padding,
     pub gap: f32,
     pub position: Option<(f32, f32)>,
@@ -217,6 +221,7 @@ impl Default for Style {
         Self {
             width: Length::Shrink,
             height: Length::Shrink,
+            max_height: None,
             padding: Padding::default(),
             gap: 0.,
             position: None,
@@ -494,8 +499,9 @@ impl<M> Element<M> {
     }
     /// A single content tree in a bounded vertical viewport. The controlled
     /// offset is clamped by layout; wheel, scrollbar and keyboard reveal emit
-    /// ScrollEvent. Give the viewport a fixed/fill height and content an
-    /// intrinsic/fixed height. Children keep their own stable focus identities.
+    /// ScrollEvent. Give the viewport a fixed/fill height, or combine Shrink
+    /// with max_height to retain its natural height up to a limit. Content has
+    /// an intrinsic/fixed height. Children keep their stable focus identities.
     pub fn scroll(
         spec: ScrollSpec,
         content: Self,
@@ -525,6 +531,14 @@ impl<M> Element<M> {
     }
     pub fn height(mut self, v: Length) -> Self {
         self.style.height = v;
+        self
+    }
+    /// Cap the outer height, including padding, without enlarging short content.
+    /// Combine with Length::Shrink for an intrinsically sized bounded viewport.
+    /// Clipping remains explicit (scroll viewports already clip). Zero is valid.
+    /// Negative and nonfinite limits clear the constraint.
+    pub fn max_height(mut self, value: f32) -> Self {
+        self.style.max_height = (value.is_finite() && value >= 0.).then_some(value);
         self
     }
     pub fn size(self, w: f32, h: f32) -> Self {
@@ -1314,6 +1328,25 @@ impl Motion {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn maximum_height_is_opt_in_and_rejects_invalid_limits() {
+        assert_eq!(Element::<()>::empty().style.max_height, None);
+        for value in [0., 240.] {
+            let tree = Element::<()>::empty().max_height(value).map(|()| true);
+            assert_eq!(tree.style.max_height, Some(value));
+            assert_eq!(tree.style.height, Length::Shrink);
+        }
+        for value in [-1., f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(
+                Element::<()>::empty()
+                    .max_height(240.)
+                    .max_height(value)
+                    .style
+                    .max_height,
+                None,
+            );
+        }
+    }
     #[test]
     fn native_surface_requests_validate_anchor_dimensions_and_redraw_targets() {
         let mut spec = SurfaceSpec {

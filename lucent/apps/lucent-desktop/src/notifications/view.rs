@@ -43,6 +43,7 @@ impl Center {
                 Element::text(&note.app)
                     .font(font::CAPTION)
                     .color(t.primary)
+                    .wrap(token::APP_LINES as usize)
                     .width(Length::Fill),
                 if history {
                     Element::empty()
@@ -167,6 +168,7 @@ impl Center {
             let action = &note.actions[index];
             let mut buttons = vec![
                 t.button(&action.label, Message::Invoke(target, action.id.clone()))
+                    .wrap(token::ACTION_LINES as usize)
                     .width(Length::Fill)
                     .id(format!(
                         "notification-action-{}-{}-{index}",
@@ -378,26 +380,31 @@ impl Center {
                 .take(limit.min(token::TOAST_LIMIT as usize))
                 .map(|note| {
                     let card = self.card(note, false, false, t, cx.now);
-                    if self.has_images(note)
-                        && let Some(target) = note.target()
-                    {
-                        t.scroll(
-                            ScrollSpec::new(
-                                self.toast_scroll.get(&target).copied().unwrap_or(0.),
-                                lucent_design::component::scroll::LINE_STEP,
+                    if let Some(target) = note.target() {
+                        let viewport = t
+                            .scroll(
+                                ScrollSpec::new(
+                                    self.toast_scroll.get(&target).copied().unwrap_or(0.),
+                                    lucent_design::component::scroll::LINE_STEP,
+                                )
+                                .expect("controlled toast offset"),
+                                card,
+                                move |event| Message::ToastScroll(target, event),
                             )
-                            .expect("controlled toast offset"),
-                            card,
-                            move |event| Message::ToastScroll(target, event),
-                        )
-                        .id(format!(
-                            "notification-toast-scroll-{}-{}",
-                            note.id, note.revision
-                        ))
-                        .padding(token::IMAGE_VIEWPORT_PADDING)
-                        .width(Length::Fill)
-                        .height(Length::Fixed(card_height.min(room)))
-                        .radius(radius::PANEL)
+                            .id(format!(
+                                "notification-toast-scroll-{}-{}",
+                                note.id, note.revision
+                            ))
+                            .padding(token::IMAGE_VIEWPORT_PADDING)
+                            .width(Length::Fill)
+                            .radius(radius::PANEL);
+                        if self.has_images(note) {
+                            viewport.height(Length::Fixed(card_height.min(room)))
+                        } else {
+                            viewport
+                                .height(Length::Shrink)
+                                .max_height(card_height.min(room))
+                        }
                     } else {
                         card
                     }

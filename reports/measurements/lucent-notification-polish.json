@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-18",
+  "status": "implementation_ready_for_hosted_checks",
+  "scope": "Notification toast reachability, bounded metadata and reconciled history navigation.",
+  "changes": [
+    "Plain toasts use naturally sized scroll viewports bounded by available screen room.",
+    "Finite nonnegative maximum outer height is an opt-in public toolkit constraint; existing uncapped trees retain their behavior.",
+    "Capped natural scroll measurement accounts for the same gutter width used by placement and scroll range.",
+    "App labels and action labels use generated line-limit tokens.",
+    "Shrinking a selected notification group clamps the canonical page before the next navigation."
+  ],
+  "validation": {
+    "formatting_passed": true,
+    "design_token_cases_passed": 592,
+    "app_icon_cases_passed": 58,
+    "diff_check_passed": true,
+    "rust_execution_pending": true,
+    "hosted_visuals_pending": true,
+    "catalogue_refresh_pending": true,
+    "native_vm_pending": true,
+    "coverage": [
+      "Actual toast layout and End navigation at short sizes, multiline metadata and exact action dispatch; short toasts retain natural height.",
+      "History group shrink followed immediately by Previous and later growth.",
+      "Generic intrinsic/fixed/Fill maximum height, padding, invalid constraints, gutter wrapping, final-action reveal and mapped callbacks.",
+      "Independent scroll-list consumer toggles fit/fill and data size, then keyboard-reveals and pointer-activates the last row.",
+      "Four new visual fixture families for short plain toasts and long toast/history metadata at both palettes and densities."
+    ],
+    "architecture_cases_passed": 26,
+    "design_token_guard_cases_passed": 4
+  },
+  "vm_started": false,
+  "native_accepted": false,
+  "full_polish_goal_complete": false
+}

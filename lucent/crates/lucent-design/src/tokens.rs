@@ -452,8 +452,10 @@ pub mod component {
         pub const MARGIN: f32 = 16.0;
         pub const PADDING: f32 = 16.0;
         pub const GAP: f32 = 8.0;
+        pub const APP_LINES: f32 = 1.0;
         pub const TITLE_LINES: f32 = 2.0;
         pub const BODY_LINES: f32 = 3.0;
+        pub const ACTION_LINES: f32 = 2.0;
         pub const TOAST_LIMIT: f32 = 3.0;
         pub const MAX_CARD_HEIGHT: f32 = 320.0;
         pub const GROUP_HEIGHT: f32 = 48.0;

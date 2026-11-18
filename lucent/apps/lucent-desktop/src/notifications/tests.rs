@@ -114,6 +114,30 @@ fn history_groups_active_and_saved_entries_with_stable_selection_and_bounded_pag
     );
     assert_eq!(center.selected_group, None);
 }
+
+#[test]
+fn shrinking_history_reconciles_the_page_before_the_next_navigation() {
+    let (mut center, _) = center();
+    let mut effects = Effects::default();
+    let snapshot = |count| NotificationSnapshot {
+        history: (1..=count)
+            .map(|id| note(id, u64::from(id), "Editor"))
+            .collect(),
+        ..Default::default()
+    };
+    center.update(Message::Snapshot(Ok(snapshot(10))), &mut effects);
+    center.update(Message::Group(center.groups()[0].key.clone()), &mut effects);
+    center.update(Message::Page(9), &mut effects);
+    assert_eq!(center.page, 9);
+    center.update(Message::Snapshot(Ok(snapshot(3))), &mut effects);
+    assert_eq!(center.page, 2);
+    center.update(Message::Page(-1), &mut effects);
+    assert_eq!(center.page, 1, "the first Previous click moves immediately");
+    center.update(Message::Snapshot(Ok(snapshot(10))), &mut effects);
+    assert_eq!(center.page, 1, "growth cannot restore the old stale index");
+    center.update(Message::Snapshot(Ok(snapshot(1))), &mut effects);
+    assert_eq!(center.page, 0);
+}
 #[test]
 fn history_reveal_reverses_continuously_and_retires_only_after_settled_submission() {
     let (mut center, _) = center();
@@ -1055,4 +1079,132 @@ fn image_toast_scrolling_keeps_the_final_native_action_reachable_on_small_output
         &mut effects,
     );
     assert!(center.toast_scroll.is_empty());
+}
+
+#[test]
+fn short_plain_toasts_keep_their_natural_height_on_tall_outputs() {
+    let (mut center, _) = center();
+    let mut effects = Effects::default();
+    center.update(
+        Message::Snapshot(Ok(NotificationSnapshot {
+            active: vec![note(1, 7, "Fixture")],
+            ..Default::default()
+        })),
+        &mut effects,
+    );
+    let font = lucent_ui::text::Font::from_bytes(
+        include_bytes!("../../assets/LucentSans.ttf").as_slice(),
+        Default::default(),
+    )
+    .unwrap();
+    let layout = lucent_ui::Layout::new(Arc::new(vec![font]));
+    let mut heights = Vec::new();
+    for height in [720., 1080.] {
+        let cx = ViewContext {
+            surface: "notifications",
+            instance: None,
+            width: 390.,
+            height,
+            now: 1.,
+            density: lucent_api::Density::ONE,
+        };
+        let scene = layout.build(
+            &center.view(&cx),
+            cx.width,
+            cx.height,
+            &lucent_ui::Interaction::default(),
+            cx.now,
+        );
+        let scroll = scene
+            .hits
+            .iter()
+            .find(|hit| hit.id == "notification-toast-scroll-1-7")
+            .and_then(|hit| hit.scroll.as_ref())
+            .expect("plain toast uses the bounded native viewport");
+        assert_eq!(scroll.maximum, 0.);
+        assert!(scroll.viewport.h > 0. && scroll.viewport.h < height / 2.);
+        heights.push(scroll.viewport.h);
+    }
+    assert_eq!(heights[0], heights[1]);
+}
+
+#[test]
+fn plain_toasts_keep_actions_reachable_with_short_outputs_and_multiline_metadata() {
+    let font = lucent_ui::text::Font::from_bytes(
+        include_bytes!("../../assets/LucentSans.ttf").as_slice(),
+        Default::default(),
+    )
+    .unwrap();
+    let layout = lucent_ui::Layout::new(Arc::new(vec![font]));
+    for (height, multiline_metadata) in [(240., false), (320., false), (720., true)] {
+        let (mut center, adapter) = center();
+        let mut effects = Effects::default();
+        let mut live = note(1, 7, "Fixture");
+        live.summary = "A long notification title that wraps within a narrow screen".repeat(2);
+        live.body = "Long content remains readable and actions remain reachable. ".repeat(12);
+        if multiline_metadata {
+            live.app = "A\n".repeat(63);
+            live.actions[0].label = "Go\n".repeat(20);
+        }
+        let target = live.target().unwrap();
+        center.update(
+            Message::Snapshot(Ok(NotificationSnapshot {
+                active: vec![live],
+                ..Default::default()
+            })),
+            &mut effects,
+        );
+        let cx = ViewContext {
+            surface: "notifications",
+            instance: None,
+            width: 390.,
+            height,
+            now: 1.,
+            density: lucent_api::Density::ONE,
+        };
+        let mut input = lucent_ui::Interaction::default();
+        let scene = layout.build(&center.view(&cx), cx.width, cx.height, &input, cx.now);
+        input.synchronize(&scene);
+        input.focus = Some("notification-toast-scroll-1-7".into());
+        for message in input.key(&scene, &Key::End) {
+            center.update(message, &mut effects);
+        }
+        if height == 240. {
+            assert!(
+                center
+                    .toast_scroll
+                    .get(&target)
+                    .is_some_and(|offset| *offset > 0.)
+            );
+        }
+        let scene = layout.build(&center.view(&cx), cx.width, cx.height, &input, cx.now);
+        let action = scene
+            .hits
+            .iter()
+            .find(|hit| hit.id == "notification-action-1-7-0")
+            .expect("final action is present even without an image");
+        let x = action.rect.x + action.rect.w / 2.;
+        let y = action.rect.y + action.rect.h / 2.;
+        assert!(
+            y >= 0. && y < height && action.contains(x, y),
+            "action clipped at height {height}"
+        );
+        assert!(
+            matches!(action.click.as_ref(), Some(Message::Invoke(actual, _)) if *actual == target)
+        );
+        center.update(action.click.clone().unwrap(), &mut effects);
+        for task in std::mem::take(&mut effects.tasks) {
+            center.update(task.run(), &mut effects);
+        }
+        assert_eq!(*adapter.calls.lock().unwrap(), [target]);
+        center.update(
+            Message::Snapshot(Ok(NotificationSnapshot::default())),
+            &mut effects,
+        );
+        center.update(
+            Message::ToastScroll(target, ScrollEvent { offset: 20. }),
+            &mut effects,
+        );
+        assert!(center.toast_scroll.is_empty());
+    }
 }
