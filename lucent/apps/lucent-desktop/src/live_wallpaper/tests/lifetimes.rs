@@ -140,6 +140,8 @@ fn apply_cannot_cross_source_or_target_round_trips_and_current_apply_captures_bo
 #[test]
 fn same_path_refresh_retires_apply_and_loading_cards_but_keeps_preview_only_browsing() {
     let mut controller = ready();
+    let retiring = controller.preview.subscriptions().pop().unwrap();
+    let retiring_id = retiring.id.clone();
     let old = control(&mut controller, "live-apply", true);
     let mut effects = Effects::default();
     controller.update(Message::RefreshLibrary, &mut effects);
@@ -150,11 +152,39 @@ fn same_path_refresh_retires_apply_and_loading_cards_but_keeps_preview_only_brow
     let loading_card = control(&mut controller, "live-library-0", false);
     controller.update(controller.browse_message(1), &mut effects);
     assert_eq!(controller.selection, 1);
+    let state = controller.preview.inspect();
+    assert_eq!(state["selected"], false);
+    assert_eq!(state["retiring"], true);
+    let subscriptions = controller.preview.subscriptions();
+    assert_eq!(subscriptions.len(), 1);
+    assert_eq!(subscriptions[0].id, retiring_id);
+
+    // Refresh retires demand, not ownership of a decoder that has not returned.
+    // Run the cancelled fixture body and deliver its actual terminal ACK before
+    // expecting discovery to have no preview subscription at all.
+    let (sender, receiver) = std::sync::mpsc::channel();
+    (retiring.run)(
+        lucent_api::Emitter::new(move |message| sender.send(message).unwrap()),
+        Cancellation::default(),
+    );
+    let messages: Vec<_> = receiver.try_iter().collect();
+    assert!(matches!(
+        messages.as_slice(),
+        [preview::Message::Ended(_, Ok(()))]
+    ));
+    assert_eq!(controller.preview.subscriptions()[0].id, retiring_id);
+    for message in messages {
+        controller.update(Message::Preview(message), &mut effects);
+    }
     assert!(controller.preview.subscriptions().is_empty());
+    assert_eq!(controller.preview.inspect()["selected"], false);
     controller.update(
         Message::LibraryLoaded(controller.library_revision, Ok(sources())),
         &mut effects,
     );
+    let subscriptions = controller.preview.subscriptions();
+    assert_eq!(subscriptions.len(), 1);
+    assert_ne!(subscriptions[0].id, retiring_id);
     controller.update(loading_card, &mut effects);
     assert_eq!(controller.selection, 1);
     controller.update(controller.select_message(0), &mut effects);

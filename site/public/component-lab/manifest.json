@@ -25,7 +25,7 @@
     "engine": "lucent-render",
     "inputs": {
       "configs/lucent/palettes.json": "8cbcea6386bb65f92673d48a379df869b417d0b45d2a6af8f9fc12d911870c3b",
-      "design/tokens.json": "89d6bdfcc83a58009265e3c4e75b9cb4c893bc27275b020ad3067755f60fa7d4",
+      "design/tokens.json": "6fdd6a8d9422019d78a51bc82c53660c5b78f4bbe542dc7b8c99bac757e19b42",
       "lucent/Cargo.lock": "feb19e1d1877d543ea01788d562bc1a1ce63be4b042e90f1d760705446580088",
       "lucent/Cargo.toml": "07968fb527905a09bdacb6302f2ff5901df101985eeadc53d48751351be3c68f",
       "lucent/apps/lucent-desktop/assets/LucentDisplay.ttf": "3e40a6e1feae6e125aef026cc29057fcd7ddf0d1302b2a3ac8b53738d6a45535",
@@ -60,7 +60,7 @@
       "lucent/crates/lucent-design/Cargo.toml": "ddc0745322b7e8d7bd8d498ecf71319073763aae35c764d44d8c876d76ef2b06",
       "lucent/crates/lucent-design/src/app_icons.rs": "b5d557142c9fd81cd922a58740fc78eb85e795f71ce4fc2f88325356687a2bfe",
       "lucent/crates/lucent-design/src/lib.rs": "ad450fe0421159b03a0006fe874df4965c089d6144ada8f1c6ed28e06b8b0c7f",
-      "lucent/crates/lucent-design/src/tokens.rs": "bbd3c6a659c2043128fb0a366568edcde92b889fe74bc93f24e73c5a8289615b",
+      "lucent/crates/lucent-design/src/tokens.rs": "e9de560d832692640015f68ceb04623e43c06352a118fa95fb43cd15e41b4e14",
       "lucent/crates/lucent-domain/Cargo.toml": "d9018899f9c12aedcc5f9f235867214377358e3579c4518f13a2b022756735b3",
       "lucent/crates/lucent-domain/src/appearance.rs": "c608791729f99005a3bf74541e25d9f290dc44bbe3c36246db6cc60ebf11d51c",
       "lucent/crates/lucent-domain/src/application_open.rs": "8b6aa0085c6569cab45795da27b02c47cca8811229263dba714735eaf5d3fb4a",
@@ -84,7 +84,7 @@
       "lucent/crates/lucent-domain/src/tray.rs": "9c0e736bccaeefc7863ad71106e430b8158a57e7c26a47e5b7df933bb558da29",
       "lucent/crates/lucent-domain/src/uri.rs": "e74480410ca849165a865571513d52310a9d29a7de7cc9370f2fa202e83ac8c6",
       "lucent/crates/lucent-domain/src/values.rs": "0e2e805b6f505db58c22c1b8a50d7d1d065320729907dd5ad3acfe358623ebdc",
-      "lucent/crates/lucent-domain/src/wallpaper_catalog.rs": "f44fb07bb17f1a251328e1a5221a7aa671f9478a3bce82e78fcd523f002cdb71",
+      "lucent/crates/lucent-domain/src/wallpaper_catalog.rs": "9ce31da14ba73594a1d9c1170b8bcc968aa0d3c302174d4baa9fb79a1188f37b",
       "lucent/crates/lucent-domain/src/weather.rs": "28677da304e89ce68ac052d1744ce6bce5649fa1236dc70375437165c683915a",
       "lucent/crates/lucent-render/Cargo.toml": "6abc9aa405efed7d98091b16690468601633adbd542dff2cd3fc384d7e0bd861",
       "lucent/crates/lucent-render/src/allocation.rs": "66b7aa386b7d3ec5245e519b7a937eb20e366db034f7a30dd76b29700c2be9db",
@@ -148,8 +148,8 @@
       "lucent/crates/lucent-usecases/src/widgets.rs": "146a59d9911213f6b9ced12f3b5eec8d8295c318faff161f0d9e4f942cc284b0"
     },
     "scope": "offscreen-native",
-    "source_commit": "f652819ed8bd2003c97c78bee30f9e12dfbd003e",
-    "token_sha256": "89d6bdfcc83a58009265e3c4e75b9cb4c893bc27275b020ad3067755f60fa7d4"
+    "source_commit": "5f86c0fd39f1ad030c873b2e79020c569934c878",
+    "token_sha256": "6fdd6a8d9422019d78a51bc82c53660c5b78f4bbe542dc7b8c99bac757e19b42"
   },
   "schema_version": 1,
   "stories": [
