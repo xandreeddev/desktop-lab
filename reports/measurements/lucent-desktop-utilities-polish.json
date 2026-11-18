@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "recorded_on": "2026-11-18",
-  "status": "implementation_ready_for_hosted_checks",
+  "status": "hosted_behavior_passed_consolidated_visual_rerun_pending",
   "scope": "Clipboard storage admission, explicit unreadable-history recovery and utility picker panel dismissal.",
   "changes": [
     "Clipboard history validates bounded regular-file reads, record identities and exact owned image paths.",
@@ -28,7 +28,7 @@
       }
     },
     "diff_check_passed": true,
-    "hosted_checks_pending": true,
+    "hosted_checks_pending": false,
     "native_vm_pending": true,
     "coverage": [
       "Exact serialized boundary, sole Unicode/escaped offers, aggregate/count eviction, deduplication, sensitivity hints and concurrent writers.",
@@ -36,7 +36,20 @@
       "Read/replace/fsync failures preserve committed bytes and clean owned temporary files or newly staged images.",
       "Recovery cancellation/reset/failure, literal text/image copying, stale image selection and copy failure before typing.",
       "Hide-before-picker and direct capture action, dismissal failures, compatibility toggling, nonopening routes and rollback to stock."
-    ]
+    ],
+    "hosted_check": {
+      "source_commit": "a95e34232015e3077e734942ea94ab6adb472a15",
+      "run_id": 44275065871,
+      "rust_job_id": 134700987579,
+      "workspace_cases_passed": 1200,
+      "controlled_protocol_cases_passed": 49,
+      "strict_clippy_passed": true,
+      "integration_site_arch_passed": true,
+      "rust_job_passed": false,
+      "failure_step": "Native Vulkan visual regressions",
+      "visual_scope": "This source predates the reviewed notification/media/system baseline updates; consolidated rerun remains pending.",
+      "log": ".cache/launcher-polish-checks/utility-ci-a95e-job.log"
+    }
   },
   "vm_started": false,
   "native_accepted": false,

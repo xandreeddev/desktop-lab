@@ -125,7 +125,7 @@
     },
     {
       "id": "desktop-utilities",
-      "status": "implementation_ready_for_hosted_checks",
+      "status": "hosted_behavior_passed_consolidated_visual_rerun_pending",
       "behavior": "Clipboard, emoji, command/menu and capture entry points feel integrated and preserve correct return-to-application behavior.",
       "toolkit": "Shared pickers, selection, clipboard transfers and any justified native popup/capture contracts.",
       "identified_work": [
@@ -135,7 +135,8 @@
       ],
       "report": "reports/measurements/lucent-desktop-utilities-polish.json",
       "completed_checks": [
-        "834 Python tests pass, including32 new clipboard and utility cases; native focus/paste/capture acceptance remains deferred."
+        "834 Python tests pass, including32 new clipboard and utility cases; native focus/paste/capture acceptance remains deferred.",
+        "Source a95e34232015 passes 1,200 hosted workspace cases, 49 controlled protocol cases, strict Clippy, integration/site and optimized Arch build. The visual step uses older baselines; the consolidated rerun remains pending. Native utility interactions stay deferred."
       ]
     },
     {
