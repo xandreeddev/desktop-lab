@@ -82,15 +82,14 @@
       "icon_cases_passed": 58,
       "receipt_sha256": "55e3e3c9e685205529ec8d790926d81201c3f101ea74ca9726742e9470f68a59"
     },
-    "final_workspace_and_visual_source_commit": "42967f8fc81e3194beeb34da3eddfdb4c232cf2f",
+    "final_workspace_and_visual_source_commit": "9626f21872a2d22c87ec2d223f3ea368e5baa371",
     "full_workspace_rust_passed": true,
     "vulkan_visual_cases_passed": 832,
-    "final_source_checkpoint": "c63c1594f918e8261acbc26fc5be1c081287c7fe"
+    "final_source_checkpoint": "9626f21872a2d22c87ec2d223f3ea368e5baa371"
   },
   "remaining": [
-    "Finish and verify the hosted optimized ordinary-client release bundle; local builds remain stopped.",
-    "After resource use is authorized again, verify target dependencies, deploy the final optimized bundle and repeat both public native helpers, including actual visual review.",
-    "Protected-main delivery."
+    "When VM resource use is authorized again, verify target dependencies, apply the optimized Arch bundle through the guarded deployment and repeat both public native helpers, including actual visual review.",
+    "Protected-main delivery requires a GitHub API account with writer permission."
   ],
   "performance_accepted": false,
   "physical_hardware_accepted": false,
@@ -134,7 +133,9 @@
     "review_receipt_sha256": "3647d966f87399cc15167519d4401ecb1f32ffbac0c6941d6fad5f03f7228358",
     "full_final_matrix_passed": true,
     "source_commit": "42967f8fc81e3194beeb34da3eddfdb4c232cf2f",
-    "cases_passed": 832
+    "cases_passed": 832,
+    "latest_comparison_source_commit": "9626f21872a2d22c87ec2d223f3ea368e5baa371",
+    "latest_comparison_cases_passed": 832
   },
   "resource_hold": {
     "requested_by_user": true,
@@ -144,15 +145,16 @@
     "scope": "The existing VM, optimized release worker, full Vulkan worker and catalogue worker are stopped. Their interrupted final checks are not accepted as passed."
   },
   "final_candidate": {
-    "source_commit": "c63c1594f918e8261acbc26fc5be1c081287c7fe",
+    "source_commit": "9626f21872a2d22c87ec2d223f3ea368e5baa371",
     "label_refinement_implemented": true,
     "baseline_changes_reviewed": true,
-    "optimized_bundle_complete": false,
+    "optimized_bundle_complete": true,
     "full_vulkan_matrix_complete": true,
     "component_catalogue_export_complete": true,
     "deployed": false,
     "native_accepted": false,
-    "production_ui_source_commit": "7b36850ed359a2160c0b62047b47219145260755"
+    "production_ui_source_commit": "7b36850ed359a2160c0b62047b47219145260755",
+    "target_vm_qualified": false
   },
   "component_catalogue": {
     "source_commit": "42967f8fc81e3194beeb34da3eddfdb4c232cf2f",
@@ -212,15 +214,60 @@
     }
   ],
   "hosted_current": {
-    "source_commit": "c63c1594f918e8261acbc26fc5be1c081287c7fe",
-    "run": "https://github.com/xandreeddev/desktop-lab/actions/runs/44094501695",
+    "source_commit": "9626f21872a2d22c87ec2d223f3ea368e5baa371",
+    "run": "https://github.com/xandreeddev/desktop-lab/actions/runs/44124938641",
     "whole_run_passed": true,
+    "required_ci_all_passed": true,
+    "jobs_passed": [
+      "site",
+      "integration-code",
+      "rust",
+      "arch-development-bundle"
+    ],
     "integration_code_passed": true,
     "site_passed": true,
     "rust_job_passed": true,
+    "arch_bundle_job_passed": true,
     "formatting_passed": true,
     "strict_workspace_clippy_passed": true,
     "full_workspace_rust_tests_passed": true,
+    "rust_test_counts": {
+      "workspace": {
+        "passed": 1130,
+        "failed": 0,
+        "ignored": 89
+      },
+      "notifications": {
+        "passed": 12,
+        "failed": 0,
+        "ignored": 0
+      },
+      "audio": {
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      "bluetooth": {
+        "passed": 17,
+        "failed": 0,
+        "ignored": 0
+      },
+      "power": {
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      },
+      "tray": {
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0
+      },
+      "media": {
+        "passed": 9,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
     "controlled_service_suites_passed": [
       "notifications",
       "audio",
@@ -231,24 +278,24 @@
     ],
     "full_vulkan_matrix_status": "success",
     "full_vulkan_visual_cases_passed": 832,
-    "visual_artifact_id": 14335321160,
-    "visual_archive_sha256": "c0c921d60cf78915d3435e4145c90e6c630ce4598a85b27752db11b492c97317",
+    "visual_artifact_id": 14348023988,
+    "visual_archive_sha256": "724e18e7d328200c1344030450946c97f762dd591145f9b5794a0f4868fc164b",
     "visual_archive_digest_verified": true,
     "all_case_pngs_present_and_crc_verified": true,
-    "visual_receipt_sha256": "6bba62d562836eb03e674350741db40b7da77f8fa53342ee90d60eaab5cb6437",
+    "visual_receipt_sha256": "19f5a49bc20b1a2f15171c979a4406bd9a07fd110b50317d2365ce2dfc3e67ae",
     "renderer": {
       "backend": "Vulkan",
       "adapter": "llvmpipe (LLVM 21.1.8, 256 bits)",
       "device_type": "Cpu",
       "driver": "Mesa 26.0.8-1ubuntu0.3 (LLVM 21.1.8)"
     },
-    "scope": "All required source checks pass. Optimized bundle construction and target VM/native acceptance remain separate."
+    "scope": "All four hosted jobs pass. The ordinary-client archive and static reference ABI are independently verified; target VM dependencies, guarded deployment and native acceptance remain held."
   },
   "hosted_optimized_candidate": {
-    "status": "arch_setup_passed_checkout_ownership_followup_prepared",
+    "status": "arch_bundle_built_hash_verified_reference_abi_checked_vm_pending",
     "artifact_name": "optimized-development-bundle",
-    "builder": "Existing lucent-dev.py release builder in its bounded user unit on GitHub",
-    "scope": "Three ordinary clients and seven theme files. The actual candidate build and target VM qualification remain open.",
+    "builder": "Existing release bundle publisher in the bounded hosted Arch container",
+    "scope": "Three ordinary clients and seven theme files. Source tests, visual comparisons, archive hashes and static reference imports pass; actual target VM qualification and native acceptance remain pending.",
     "local_packaging_check": {
       "existing_verified_release_packaged": true,
       "manifest_and_all_payloads_survive_archive_round_trip": true,
@@ -413,6 +460,100 @@
         "followup": "Trust only the exact GITHUB_WORKSPACE path in the ephemeral CI container before invoking the publisher. Retain source revision, dirty-state and payload ownership checks.",
         "log_sha256": "8f3664b7585686256a803a23bf3b7a7ec87d7d2f0eba5a32d146413e4f1ae8bf"
       }
+    },
+    "arch_candidate": {
+      "run_id": 44124938641,
+      "job_id": 134186628360,
+      "source_commit": "9626f21872a2d22c87ec2d223f3ea368e5baa371",
+      "artifact_id": 14348910503,
+      "github_archive_sha256": "58baa0aea99cb41153441a98bbcedf2ae127afe4849bb8f2ba1019477768feeb",
+      "github_archive_digest_verified": true,
+      "inner_archive_sha256": "bbd43625382eec7c5c7fa766ae38316f4f690cff042ef91be6c564e0fcb21188",
+      "manifest_sha256": "abb17cc958f008a9162cf78415dc045a0567c7a3a835c0203dc02ad236224893",
+      "profile": "release",
+      "binaries": {
+        "lucent-desktop": {
+          "sha256": "a7ceff4e632fc1c51ef4fdaee7b5d7a5b58b159a8efa80da5d58fbcd8f3b847c",
+          "bytes": 37591400
+        },
+        "lucent-cli": {
+          "sha256": "98acaeeb9becb75eb4c0393e78147cc577ac1aac038c6abee5da06f8c534eecb",
+          "bytes": 409048
+        },
+        "lucent-menu": {
+          "sha256": "2180aeb81c3199d967dde5b811e5182a6d387e22da458b5fedcbc341ede9f674",
+          "bytes": 24439320
+        }
+      },
+      "support_files_verified": 7,
+      "builder_qualification_verified": true,
+      "arch_reference_imports_verified": true,
+      "actual_elf_imports_independently_verified": true,
+      "resource_limits": {
+        "cpu_cores": 1,
+        "memory_max_bytes": 4294967296,
+        "swap_max_bytes": 0,
+        "pids_max": 512
+      },
+      "builder_platform": "Arch Linux",
+      "container_pid1": "docker-init",
+      "packages": [
+        "glibc 2.44+r78+gfcfb867c58ab-1",
+        "ffmpeg 2:9.0.2-5",
+        "rustup 1.29.3-1"
+      ],
+      "all_local_payload_hashes_verified": true,
+      "producer_inputs_verified_against_current_checkout": true,
+      "producer_inputs_sha256": "bdb63d5b17399ec392a424fc186c08e00662148543e9fc988c28ae52fe13efa5",
+      "bundle": ".cache/launcher-polish-checks/ci-optimized-9626-14348910503/payload/9626f21872a2-ec2f68d4b3b310853d313789",
+      "vm_qualified": false,
+      "deployed": false,
+      "native_accepted": false,
+      "local_compilation_or_rendering_started": false,
+      "elf_formats": {
+        "lucent-desktop": {
+          "class": 64,
+          "machine": "x86_64",
+          "byte_order": "little",
+          "interpreter": "/lib64/ld-linux-x86-64.so.2"
+        },
+        "lucent-cli": {
+          "class": 64,
+          "machine": "x86_64",
+          "byte_order": "little",
+          "interpreter": "/lib64/ld-linux-x86-64.so.2"
+        },
+        "lucent-menu": {
+          "class": 64,
+          "machine": "x86_64",
+          "byte_order": "little",
+          "interpreter": "/lib64/ld-linux-x86-64.so.2"
+        }
+      },
+      "static_elf_format_verified": true,
+      "required_ci_all_passed": true,
+      "receipt_sha256": "8c5988dfbe23c126b1b67de7e71b9eac3aa48c34202bdaa3c8af5494eddf36f2",
+      "arch_reference_imports": {
+        "reference_source_commit": "b574812e1ac7db44121347399b5ae2b07daa77fa",
+        "needed_libraries_match_reference": true,
+        "maximum_required_glibc": "2.44",
+        "vm_qualified": false,
+        "native_accepted": false
+      },
+      "target_qualification_pending": true
+    },
+    "source_equivalence": {
+      "verified": true,
+      "from": "42967f8fc81e3194beeb34da3eddfdb4c232cf2f",
+      "to": "9626f21872a2d22c87ec2d223f3ea368e5baa371",
+      "unchanged_objects": {
+        "lucent": "253d58accd5c7245e5f5a2d069d30abf17c07b48",
+        "design": "8ac7a305599a8e91a524dea9ebc31e0b35317d85",
+        "configs/lucent": "cc0d61efa3bdb845a66b8c70a3dd48b2525602f9",
+        "scripts/generate-design-tokens.py": "0e68d7bc11287521ff0aeaa57f69fc7bccb16ef9",
+        "scripts/generate-app-icons.py": "30a6e8d1e85599470896a4607d4dc03490d99d7f"
+      },
+      "scope": "Production Rust/UI, design/configuration and generator source are unchanged from the reviewed 429 catalogue. This supports keeping that catalogue; it does not qualify the target VM or substitute for current CI."
     }
   },
   "hosted_verified_parent": {
@@ -496,5 +637,40 @@
     "visual_archive_sha256": "724841d5f62e46700a222715af4d79058d1ecbd970fb863f7396cd7ad71ddd39",
     "visual_artifact_id": 14341246415,
     "source_checks_scope": "All required CI passes. Successful publication does not accept the Ubuntu desktop FFmpeg imports for the Arch target."
-  }
+  },
+  "hosted_verified_checkpoints": [
+    {
+      "source_commit": "c63c1594f918e8261acbc26fc5be1c081287c7fe",
+      "run": "https://github.com/xandreeddev/desktop-lab/actions/runs/44094501695",
+      "whole_run_passed": true,
+      "integration_code_passed": true,
+      "site_passed": true,
+      "rust_job_passed": true,
+      "formatting_passed": true,
+      "strict_workspace_clippy_passed": true,
+      "full_workspace_rust_tests_passed": true,
+      "controlled_service_suites_passed": [
+        "notifications",
+        "audio",
+        "bluetooth",
+        "power",
+        "tray",
+        "media"
+      ],
+      "full_vulkan_matrix_status": "success",
+      "full_vulkan_visual_cases_passed": 832,
+      "visual_artifact_id": 14335321160,
+      "visual_archive_sha256": "c0c921d60cf78915d3435e4145c90e6c630ce4598a85b27752db11b492c97317",
+      "visual_archive_digest_verified": true,
+      "all_case_pngs_present_and_crc_verified": true,
+      "visual_receipt_sha256": "6bba62d562836eb03e674350741db40b7da77f8fa53342ee90d60eaab5cb6437",
+      "renderer": {
+        "backend": "Vulkan",
+        "adapter": "llvmpipe (LLVM 21.1.8, 256 bits)",
+        "device_type": "Cpu",
+        "driver": "Mesa 26.0.8-1ubuntu0.3 (LLVM 21.1.8)"
+      },
+      "scope": "All required source checks pass. Optimized bundle construction and target VM/native acceptance remain separate."
+    }
+  ]
 }

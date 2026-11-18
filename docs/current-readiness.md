@@ -3,7 +3,9 @@
 ## Current desktop polish work
 
 The [polish backlog](desktop-polish.json) tracks the current Caelestia reference
-and the one-feature-at-a-time delivery rule. The VM is now **powered off at the
+and the one-feature-at-a-time delivery rule. The user instructed continued implementation
+and remote testing on 2026-11-18 with the VM off. Native acceptance stays pending
+while source work proceeds through the remaining features. The VM is now **powered off at the
 user's request to free memory**. Local builds and renders were stopped too;
 leave them stopped until resource use is authorized again. Its last installed
 and native-tested optimized three-client launcher candidate is `b574812e1ac7`;
@@ -56,8 +58,14 @@ remain historical. At that source, all 1,130 regular workspace tests, 49 control
 and 832 production Vulkan comparisons pass on software Vulkan. The
 visual artifact digest and every case PNG were independently verified. The promoted branch then passes [all required CI at c63c1594](https://github.com/xandreeddev/desktop-lab/actions/runs/44094501695),
 including integration/site checks and a second independently verified 832-case
-visual artifact. The hosted optimized three-client bundle is being prepared;
-its target dependencies, guarded deployment and native acceptance remain open.
+visual artifact. The [hosted Arch build at 9626f218](https://github.com/xandreeddev/desktop-lab/actions/runs/44124938641)
+now passes all four jobs, including 1,130 regular Rust tests, 49 controlled service
+cases and 832 Vulkan comparisons. Its optimized three-client/seven-theme archive
+is independently verified against GitHub and payload hashes, the clean source
+inputs, x86_64 ELF format and the VM-tested FFmpeg9/GLIBC2.44 import reference.
+The production rendering inputs are unchanged from the reviewed catalogue.
+The VM stays off under the memory hold; actual target dependencies, guarded
+deployment and the final native interactions/visual review remain open.
 
 ## Delivery and earlier source-specific evidence
 
