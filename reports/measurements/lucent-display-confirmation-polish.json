@@ -33,7 +33,15 @@
       "arch_bundle_build_passed": true,
       "visual_step_passed": false,
       "visual_failure_scope": "Notification baseline changes awaiting review; full visual acceptance remains pending.",
-      "raw_log": ".cache/launcher-polish-checks/tray-display-rust-4bdb.log"
+      "raw_log": ".cache/launcher-polish-checks/tray-display-rust-4bdb.log",
+      "visual_cases": 848,
+      "visual_passed_cases": 828,
+      "visual_differences": 20,
+      "visual_artifact_id": 14412623329,
+      "visual_archive_sha256": "87e1b2e4e39960bcaaca016f2c72ff6d534015890f5b113e181c06830dd6e92c",
+      "visual_archive_digest_verified": true,
+      "visual_case_pngs_crc_verified": true,
+      "visual_receipt": ".cache/launcher-polish-checks/ci-visual-4bdbb7d897f8-14412623329/receipt.json"
     }
   },
   "vm_started": false,

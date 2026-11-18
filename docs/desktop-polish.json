@@ -112,7 +112,7 @@
     },
     {
       "id": "bar-dock-tray",
-      "status": "implementation_ready_for_hosted_checks",
+      "status": "hosted_behavior_passed_visual_review_pending",
       "behavior": "Tray menus invoke only the displayed application and menu lifetime; dock gestures preserve newer pin preferences.",
       "toolkit": "Existing mapped input callbacks, clipped hit testing and controlled scrolling; menu identities and pin authority stay in clients.",
       "report": "reports/measurements/lucent-bar-dock-tray-polish.json",
@@ -125,7 +125,7 @@
     },
     {
       "id": "desktop-utilities",
-      "status": "queued",
+      "status": "in_progress",
       "behavior": "Clipboard, emoji, command/menu and capture entry points feel integrated and preserve correct return-to-application behavior.",
       "toolkit": "Shared pickers, selection, clipboard transfers and any justified native popup/capture contracts.",
       "identified_work": [
@@ -169,7 +169,7 @@
         "Preserve pending display apply cancellation across close then reopen before admission returns.",
         "Verify authentication control reachability on short outputs and long prompts before presentation-only changes; preserve all secure authority."
       ],
-      "active_slice": "Display confirmation source committed for hosted validation; broader output/session presentation remains queued.",
+      "active_slice": "Display confirmations passed hosted behavior checks; session presentation remains queued.",
       "report": "reports/measurements/lucent-display-confirmation-polish.json"
     },
     {
