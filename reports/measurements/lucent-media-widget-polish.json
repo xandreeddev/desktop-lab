@@ -56,7 +56,16 @@
       "Real pointer and Tab/Enter commands, exact player identity, unavailable/pending/removed-player guards and visible availability labels.",
       "Actual resize-grip capture, input-only frozen native source, responsive preview, committed source reconstruction and preference serialization.",
       "Cancelled resize and presentation-only output constraints."
-    ]
+    ],
+    "component_catalogue": {
+      "source_commit": "30ed89acb7d31fb8103dbd34bf68f0bdc845a983",
+      "artifact_id": 14419607104,
+      "archive_sha256": "9d609837dbd0e99e7c5c908e8e238aefffbb694792bcd554703d7a580ddb9f4f",
+      "producer_inputs": 122,
+      "captures": 480,
+      "identical_to_previous_reviewed_matrix": true,
+      "promoted": true
+    }
   },
   "vm_started": false,
   "native_accepted": false,

@@ -25,7 +25,7 @@
     "engine": "lucent-render",
     "inputs": {
       "configs/lucent/palettes.json": "8cbcea6386bb65f92673d48a379df869b417d0b45d2a6af8f9fc12d911870c3b",
-      "design/tokens.json": "d456d8721c7da264cf5e9df22b5eb246c92140975fa6e40dd6c48052e8c5ee20",
+      "design/tokens.json": "afa380223cebe51d3c261741411dfd16f241eae045670b181533424b53aa2202",
       "lucent/Cargo.lock": "feb19e1d1877d543ea01788d562bc1a1ce63be4b042e90f1d760705446580088",
       "lucent/Cargo.toml": "07968fb527905a09bdacb6302f2ff5901df101985eeadc53d48751351be3c68f",
       "lucent/apps/lucent-desktop/assets/LucentDisplay.ttf": "3e40a6e1feae6e125aef026cc29057fcd7ddf0d1302b2a3ac8b53738d6a45535",
@@ -60,7 +60,7 @@
       "lucent/crates/lucent-design/Cargo.toml": "ddc0745322b7e8d7bd8d498ecf71319073763aae35c764d44d8c876d76ef2b06",
       "lucent/crates/lucent-design/src/app_icons.rs": "b5d557142c9fd81cd922a58740fc78eb85e795f71ce4fc2f88325356687a2bfe",
       "lucent/crates/lucent-design/src/lib.rs": "ad450fe0421159b03a0006fe874df4965c089d6144ada8f1c6ed28e06b8b0c7f",
-      "lucent/crates/lucent-design/src/tokens.rs": "9da676fd2bf90fc4d302eed4d62e6acac4e4e02c6f790d5b67b5c2189dac0573",
+      "lucent/crates/lucent-design/src/tokens.rs": "7f15d7a8084b0cb659fd35469bd465debe592a0bcdf9f03f07a161fa183059c7",
       "lucent/crates/lucent-domain/Cargo.toml": "d9018899f9c12aedcc5f9f235867214377358e3579c4518f13a2b022756735b3",
       "lucent/crates/lucent-domain/src/appearance.rs": "c608791729f99005a3bf74541e25d9f290dc44bbe3c36246db6cc60ebf11d51c",
       "lucent/crates/lucent-domain/src/application_open.rs": "8b6aa0085c6569cab45795da27b02c47cca8811229263dba714735eaf5d3fb4a",
@@ -148,8 +148,8 @@
       "lucent/crates/lucent-usecases/src/widgets.rs": "146a59d9911213f6b9ced12f3b5eec8d8295c318faff161f0d9e4f942cc284b0"
     },
     "scope": "offscreen-native",
-    "source_commit": "33dbd58ad72ed41307b311161250dc24832c956b",
-    "token_sha256": "d456d8721c7da264cf5e9df22b5eb246c92140975fa6e40dd6c48052e8c5ee20"
+    "source_commit": "30ed89acb7d31fb8103dbd34bf68f0bdc845a983",
+    "token_sha256": "afa380223cebe51d3c261741411dfd16f241eae045670b181533424b53aa2202"
   },
   "schema_version": 1,
   "stories": [
