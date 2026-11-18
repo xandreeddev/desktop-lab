@@ -201,6 +201,26 @@ mod tests {
             app.update(message, &mut Effects::default());
         }
     }
+    fn assert_footer_visible(scene: &lucent_ui::Scene<Message>, cx: &ViewContext) {
+        for id in ["resize", "fewer", "fit", "hide", "close"] {
+            let hit = scene.hits.iter().find(|hit| hit.id == id).expect(id);
+            let visible = hit.clip.bounds.intersect(Rect::new(
+                space::XL,
+                space::XL,
+                cx.width - space::XL * 2.,
+                cx.height - space::XL * 2.,
+            ));
+            assert!(
+                hit.rect.x >= visible.x - 0.01
+                    && hit.rect.y >= visible.y - 0.01
+                    && hit.rect.x + hit.rect.w <= visible.x + visible.w + 0.01
+                    && hit.rect.y + hit.rect.h <= visible.y + visible.h + 0.01,
+                "footer control {id} is clipped: {:?} in {visible:?}",
+                hit.rect,
+            );
+            assert!(hit.contains(hit.rect.x + hit.rect.w / 2., hit.rect.y + hit.rect.h / 2.,));
+        }
+    }
 
     #[test]
     fn independent_client_fits_short_data_and_scrolls_to_click_the_last_long_row() {
@@ -213,8 +233,11 @@ mod tests {
         let layout = Layout::new(Arc::new(fonts));
         let mut input = Interaction::default();
         let cx = context();
+        let scene = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
+        assert_footer_visible(&scene, &cx);
         activate(&mut app, &layout, &mut input, "fit");
         let scene = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
+        assert_footer_visible(&scene, &cx);
         input.synchronize(&scene);
         let list = scene.hits.iter().find(|hit| hit.id == "items").unwrap();
         assert_eq!(list.rect.h, app.natural_limit());
@@ -247,6 +270,7 @@ mod tests {
 
         activate(&mut app, &layout, &mut input, "fewer");
         let scene = layout.build(&app.view(&cx), cx.width, cx.height, &input, cx.now);
+        assert_footer_visible(&scene, &cx);
         let list = scene.hits.iter().find(|hit| hit.id == "items").unwrap();
         assert_eq!(
             list.rect.h,
@@ -266,5 +290,17 @@ mod tests {
                 < long_footer
         );
         assert_eq!(app.selected, None);
+
+        input.synchronize(&scene);
+        let close = scene.hits.iter().find(|hit| hit.id == "close").unwrap();
+        let (x, y) = (
+            close.rect.x + close.rect.w / 2.,
+            close.rect.y + close.rect.h / 2.,
+        );
+        input.press(&scene, x, y);
+        let close = input.release(x, y).expect("Close remains clickable");
+        let mut effects = Effects::default();
+        app.update(close, &mut effects);
+        assert!(effects.exit);
     }
 }
