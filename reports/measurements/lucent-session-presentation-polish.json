@@ -12,7 +12,12 @@
   ],
   "toolkit": {
     "new_public_api": false,
-    "reused": ["RichText per-line painting", "controlled ScrollSpec", "max_height intrinsic viewport", "toolkit focus and pointer routing"],
+    "reused": [
+      "RichText per-line painting",
+      "controlled ScrollSpec",
+      "max_height intrinsic viewport",
+      "toolkit focus and pointer routing"
+    ],
     "independent_consumer": "lucent/examples/scroll-list"
   },
   "validation": {
@@ -36,7 +41,16 @@
       "Actual keyboard and pointer activation, disabled-field focus retirement and authorization cancellation.",
       "Long public text tail reachability beyond an ordinary 1024-physical-pixel raster and honest truncation at the public line bound.",
       "Stale public scrolling, equal-geometry thumb retirement and zeroizing secret count-only presentation."
-    ]
+    ],
+    "component_catalogue": {
+      "source_commit": "33dbd58ad72ed41307b311161250dc24832c956b",
+      "artifact_id": 14419280037,
+      "archive_sha256": "770ec564ffcee740001b5e83e8c69a55da64b087c615fb3f820cb5c977b094e2",
+      "producer_inputs": 122,
+      "captures": 480,
+      "identical_to_previous_reviewed_matrix": true,
+      "promoted": true
+    }
   },
   "vm_started": false,
   "native_accepted": false,
